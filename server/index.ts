@@ -1,13 +1,10 @@
-import { Server as WebSocketServer } from 'ws'
+import { createServer } from './create-server'
 
 // eslint-disable-next-line no-console
-const log = (...data: any[]): void => console.log('Server:', ...data)
+const log = (...data: any[]): void => console.log('Server -', ...data)
 
-const server = new WebSocketServer({ port: 3000 })
+const server = createServer()
 
-server.on('connection', socket => {
-  log('connection received')
-  socket.on('message', data => {
-    log('received:', data)
-  })
+server.listen(3000, () => {
+  log('listening:', server.address())
 })

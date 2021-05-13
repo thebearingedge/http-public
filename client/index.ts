@@ -1,15 +1,14 @@
-import WebSocketClient from 'ws'
-import retry from 'promise-retry'
+import { createClient } from './create-client'
 
 // eslint-disable-next-line no-console
-const log = (...data: any[]): void => console.log('Client:', ...data)
+const log = (...data: any[]): void => console.log('Client -', ...data)
 
 ;(function main(): void {
 
   ;(async () => {
 
-    const client = await createClient()
-
+    const client = await createClient('ws://test.localhost:3000')
+    log('connected')
     client
       .on('close', (...args: any[]) => {
         log('closed', args)
@@ -20,11 +19,9 @@ const log = (...data: any[]): void => console.log('Client:', ...data)
         log('message', args)
       })
       .on('error', err => {
-        console.error(err)
+        console.error('Client -', err)
         process.exit(1)
       })
-
-    client.send(JSON.stringify({ foo: 'bar' }))
 
   })().catch(err => {
     console.error(err)
@@ -32,23 +29,3 @@ const log = (...data: any[]): void => console.log('Client:', ...data)
   })
 
 })()
-
-async function createClient(): Promise<WebSocketClient> {
-  return await retry(async retry => {
-    const client = new WebSocketClient('ws://localhost:3000')
-    try {
-      return await new Promise((resolve, reject) => {
-        client.once('open', () => {
-          client.removeAllListeners()
-          resolve(client)
-        })
-        client.once('error', err => {
-          client.removeAllListeners()
-          reject(err)
-        })
-      })
-    } catch (err) {
-      return retry(err)
-    }
-  })
-}
