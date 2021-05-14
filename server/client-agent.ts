@@ -1,38 +1,39 @@
 import EventEmitter from 'events'
 import { Socket as TcpSocket } from 'net'
 import { Agent, AgentOptions } from 'http'
-import { v4 as uuid } from 'uuid'
 import WebSocket from 'ws'
+import { v4 as uuid } from 'uuid'
+
+type ClientAgentOptions = AgentOptions & {
+  client: WebSocket
+  remoteHostname: string
+}
 
 type OnConnection = {
   (err: Error | null, socket?: TcpSocket): void
 }
 
-type ControllerAgentOptions = AgentOptions & {
-  client: WebSocket
-  remoteHostname: string
-}
+export interface ClientAgent extends EventEmitter, Agent {}
 
-export interface LocalAgent extends EventEmitter, Agent {}
+export class ClientAgent extends Agent {
 
-export class LocalAgent extends Agent {
-
-  private readonly remoteHostname: string
   private readonly client: WebSocket
-  private readonly requested: Set<string>
-  private readonly connecting: Map<string, TcpSocket>
+  private readonly remoteHostname: string
+  private readonly requestedTunnels: Set<string>
+  private readonly connectingTunnels: Map<string, TcpSocket>
 
-  constructor(options: ControllerAgentOptions) {
-    const { remoteHostname, client, ...agentOptions } = options
+  constructor(options: ClientAgentOptions) {
+    const { client, remoteHostname, ...agentOptions } = options
     super({ ...agentOptions, keepAlive: true, maxFreeSockets: 1 })
-    this.remoteHostname = remoteHostname
     this.client = client
-    this.requested = new Set()
-    this.connecting = new Map()
+    this.remoteHostname = remoteHostname
+    this.requestedTunnels = new Set()
+    this.connectingTunnels = new Map()
     this.client.once('close', () => this.destroy())
   }
 
   createConnection(_: unknown, callback: OnConnection): void {
+
     const { remoteHostname, client } = this
     const tunnelId = uuid()
     const message = JSON.stringify({
@@ -41,8 +42,8 @@ export class LocalAgent extends Agent {
     })
 
     const handleTunnelConnecting = (socket: TcpSocket): void => {
-      this.requested.delete(tunnelId)
-      this.connecting.set(tunnelId, socket)
+      this.requestedTunnels.delete(tunnelId)
+      this.connectingTunnels.set(tunnelId, socket)
     }
 
     const handleTunnelEstablished = (message: string): void => {
@@ -52,20 +53,19 @@ export class LocalAgent extends Agent {
         return
       }
       this.client.off('message', handleTunnelEstablished)
-      const socket = this.connecting.get(tunnelId)!
-      this.connecting.delete(tunnelId)
+      const socket = this.connectingTunnels.get(tunnelId)!
+      this.connectingTunnels.delete(tunnelId)
       callback(null, socket)
     }
 
-    this.requested.add(tunnelId)
+    this.requestedTunnels.add(tunnelId)
     this.once(`tunnel-${tunnelId}`, handleTunnelConnecting)
     this.client.on('message', handleTunnelEstablished)
     client.send(message)
-
   }
 
   expectsTunnel(tunnelId: string): boolean {
-    return this.requested.has(tunnelId)
+    return this.requestedTunnels.has(tunnelId)
   }
 
 }

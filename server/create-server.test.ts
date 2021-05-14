@@ -68,6 +68,22 @@ describe('createServer', () => {
         req.end()
       })
 
+      it('requires a valid x-remote-hostname header', done => {
+        const reqOptions = {
+          port: proxyPort,
+          headers: {
+            connection: 'upgrade',
+            upgrade: 'websocket',
+            'x-remote-hostname': ''
+          }
+        }
+        const req = request(reqOptions).once('error', err => {
+          expect(err).to.have.property('message', 'socket hang up')
+          done()
+        })
+        req.end()
+      })
+
       it('accepts a control connection over websockets', done => {
         const client = new WebSocket(proxyHost, {
           headers: { 'x-remote-hostname': 'test.localhost' }
@@ -82,7 +98,7 @@ describe('createServer', () => {
 
     describe('tunnel upgrades', () => {
 
-      it('require x-tunnel-id and x-tunnel-host headers', done => {
+      it('require x-tunnel-id and x-tunnel-hostname headers', done => {
         const reqOptions = {
           port: proxyPort,
           headers: {
@@ -105,7 +121,7 @@ describe('createServer', () => {
             connection: 'upgrade',
             upgrade: '@http-public/tunnel',
             'x-tunnel-id': uuid(),
-            'x-tunnel-host': ''
+            'x-tunnel-hostname': ''
           }
         }
         const req = request(reqOptions).once('error', err => {
@@ -123,7 +139,7 @@ describe('createServer', () => {
             connection: 'upgrade',
             upgrade: '@http-public/tunnel',
             'x-tunnel-id': uuid(),
-            'x-tunnel-host': 'unknown.localhost'
+            'x-tunnel-hostname': 'unknown.localhost'
           }
         }
         const req = request(reqOptions).once('error', err => {
@@ -139,20 +155,19 @@ describe('createServer', () => {
 
   describe('http requests', () => {
 
-    it('requires a valid x-remote-hostname header', done => {
-      const reqOptions = {
-        port: proxyPort,
-        headers: {
-          connection: 'upgrade',
-          upgrade: 'websocket',
-          'x-remote-hostname': ''
-        }
-      }
-      const req = request(reqOptions).once('error', err => {
-        expect(err).to.have.property('message', 'socket hang up')
+    it('requires a valid host header', done => {
+      const socket = connect({
+        host: 'localhost',
+        port: proxyPort
+      })
+      socket.write('GET / HTTP/1.1\r\n\r\n')
+      socket.once('error', done)
+      socket.once('data', data => {
+        const message = data.toString()
+        expect(message).to.match(/^HTTP\/1\.1 400 Bad Request/)
+        socket.end()
         done()
       })
-      req.end()
     })
 
     it('ignores requests to unknown hostnames', done => {
@@ -190,7 +205,7 @@ describe('createServer', () => {
           connection: 'upgrade',
           upgrade: '@http-public/tunnel',
           'x-tunnel-id': tunnelId,
-          'x-tunnel-host': remoteHostname
+          'x-tunnel-hostname': remoteHostname
         }
       })
       tunnelReq.once('upgrade', (_, socket) => {

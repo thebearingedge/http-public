@@ -1,7 +1,13 @@
+import {
+  request,
+  Server as HttpServer,
+  IncomingMessage as Req,
+  ServerResponse as Res
+} from 'http'
 import { Socket as TcpSocket } from 'net'
-import { IncomingMessage as Req, request, Server as HttpServer, ServerResponse } from 'http'
 import { Server as WebSocketServer } from 'ws'
-import { LocalAgent } from './local-agent'
+import { ClientAgent } from './client-agent'
+import { isString, isUndefined, getHostname } from './util'
 
 type ProxyServerOptions = {
   hostname: string
@@ -10,7 +16,7 @@ type ProxyServerOptions = {
 export const createServer = (options: ProxyServerOptions): HttpServer => {
 
   const { hostname: serverHostname } = options
-  const localAgents = new Map<string, LocalAgent>()
+  const clientAgents = new Map<string, ClientAgent>()
 
   const proxyServer = new HttpServer()
   const controlServer = new WebSocketServer({ noServer: true })
@@ -24,35 +30,35 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
     }
     controlServer.handleUpgrade(req, socket, head, client => {
       const agentOptions = { remoteHostname, client }
-      localAgents.set(remoteHostname, new LocalAgent(agentOptions))
-      client.once('close', () => localAgents.delete(remoteHostname))
+      clientAgents.set(remoteHostname, new ClientAgent(agentOptions))
+      client.once('close', () => clientAgents.delete(remoteHostname))
     })
   }
 
   const handleTunnelUpgrade = (req: Req, socket: TcpSocket): void => {
     const {
       'x-tunnel-id': tunnelId,
-      'x-tunnel-host': tunnelHost
+      'x-tunnel-hostname': tunnelHost
     } = req.headers
     if (!isString(tunnelId) || !isString(tunnelHost)) {
-      // x-tunnel-id and x-tunnel-tunnel headers are required
+      // x-tunnel-id and x-tunnel-hostname headers are required
       socket.destroy()
       return
     }
     const tunnelHostname = getHostname(tunnelHost)
     if (isUndefined(tunnelHostname)) {
-      // x-tunnel-host is not valid
+      // x-tunnel-hostname is not valid
       socket.destroy()
       return
     }
-    const agent = localAgents.get(tunnelHostname)
+    const agent = clientAgents.get(tunnelHostname)
     if (isUndefined(agent)) {
       // no client listening
       socket.destroy()
       return
     }
     if (!agent.expectsTunnel(tunnelId)) {
-      // unnecessary tunnel started
+      // unexpected tunnel opened
       socket.destroy()
       return
     }
@@ -60,7 +66,7 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
     socket.write(
       'HTTP/1.1 101 Switching Protocols\r\n' +
       'Connection: Upgrade\r\n' +
-      'Upgrade: tunnel\r\n' +
+      'Upgrade: @http-public/tunnel\r\n' +
       '\r\n'
     )
   }
@@ -77,28 +83,28 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       return
     }
     if (reqHostname === serverHostname) {
-      // a local client is connecting
+      // a local client is connecting to the proxy server
       handleClientUpgrade(req, socket, head)
       return
     }
-    // TODO: a remote client is upgrading
-    // only tunnels and websockets allowed
+    // TODO: a remote client is upgrading with a proxied server
     socket.destroy()
   })
 
-  proxyServer.on('request', (proxyReq: Req, proxyRes: ServerResponse) => {
+  proxyServer.on('request', (proxyReq: Req, proxyRes: Res) => {
     const hostname = getHostname(proxyReq.headers.host)
     if (isUndefined(hostname)) {
       // host header is required
-      proxyRes.writeHead(404).end()
+      proxyRes.writeHead(400).end()
       return
     }
-    const agent = localAgents.get(hostname)
+    const agent = clientAgents.get(hostname)
     if (isUndefined(agent)) {
-      // no localAgents are serving this hostname
+      // no client agents are serving this hostname
       proxyRes.writeHead(404).end()
       return
     }
+    // forward the request through the client agent
     const { method, url, headers } = proxyReq
     const remoteReqOptions = { method, url, headers, agent }
     const remoteReq = request(remoteReqOptions, remoteRes => {
@@ -109,19 +115,4 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
   })
 
   return proxyServer
-}
-
-const getHostname = (value: unknown): string | undefined => {
-  if (!isString(value)) return
-  try {
-    return new URL(`http://${value}`).hostname
-  } catch (err) {}
-}
-
-const isUndefined = (value: unknown): value is void => {
-  return typeof value === 'undefined'
-}
-
-const isString = (value: unknown): value is string => {
-  return typeof value === 'string'
 }
