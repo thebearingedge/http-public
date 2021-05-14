@@ -28,10 +28,8 @@
       "error",
       "method"
     ],
-    "@typescript-eslint/consistent-type-definitions": [
-      "error",
-      "type"
-    ],
+    "@typescript-eslint/restrict-template-expressions": "off",
+    "@typescript-eslint/consistent-type-definitions": "off",
     "@typescript-eslint/no-non-null-assertion": "off",
     "@typescript-eslint/space-before-function-paren": [
       "error",
