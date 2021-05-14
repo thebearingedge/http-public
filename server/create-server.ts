@@ -1,68 +1,51 @@
 import { Socket as TcpSocket } from 'net'
-import { IncomingMessage, request, Server as HttpServer } from 'http'
+import { IncomingMessage as Req, request, Server as HttpServer, ServerResponse } from 'http'
 import { Server as WebSocketServer } from 'ws'
-import { ControllerAgent } from './controller-agent'
+import { LocalAgent } from './local-agent'
 
-type RemoteProxyOptions = {
+type ProxyServerOptions = {
   hostname: string
 }
 
-export const createServer = (options: RemoteProxyOptions): HttpServer => {
-  const { hostname: serverHostname } = options
-  const clients = new Map<string, ControllerAgent>()
+export const createServer = (options: ProxyServerOptions): HttpServer => {
 
-  const httpServer = new HttpServer()
+  const { hostname: serverHostname } = options
+  const localAgents = new Map<string, LocalAgent>()
+
+  const proxyServer = new HttpServer()
   const controlServer = new WebSocketServer({ noServer: true })
 
-  httpServer.on('upgrade', (req: IncomingMessage, socket: TcpSocket, head: Buffer) => {
-    const hostname = getHostname(req.headers.host)
-    if (hostname === '') {
-      // hostname header is required
+  const handleClientUpgrade = (req: Req, socket: TcpSocket, head: Buffer): void => {
+    const remoteHostname = getHostname(req.headers['x-remote-hostname'])
+    if (isUndefined(remoteHostname)) {
+      // x-remote-hostname header is required
       socket.destroy()
       return
     }
-    if (req.headers.upgrade === 'websocket') {
-      if (hostname === serverHostname) {
-        // a local client is connecting
-        const { 'x-remote-hostname': remoteHostname } = req.headers
-        if (!isString(remoteHostname)) {
-          // x-remote-hostname header is required
-          socket.destroy()
-          return
-        }
-        controlServer.handleUpgrade(req, socket, head, controlSocket => {
-          const agentOptions = { remoteHostname, controlSocket }
-          clients.set(remoteHostname, new ControllerAgent(agentOptions))
-          controlSocket.once('close', () => clients.delete(hostname))
-        })
-        return
-      }
-      // TODO: a remote client is connecting
-      socket.destroy()
-      return
-    }
-    if (req.headers.upgrade !== 'tunnel') {
-      // only tunnels and websockets permitted
-      socket.destroy()
-      return
-    }
+    controlServer.handleUpgrade(req, socket, head, client => {
+      const agentOptions = { remoteHostname, client }
+      localAgents.set(remoteHostname, new LocalAgent(agentOptions))
+      client.once('close', () => localAgents.delete(remoteHostname))
+    })
+  }
+
+  const handleTunnelUpgrade = (req: Req, socket: TcpSocket): void => {
     const {
       'x-tunnel-id': tunnelId,
       'x-tunnel-host': tunnelHost
     } = req.headers
     if (!isString(tunnelId) || !isString(tunnelHost)) {
-      // x-tunnel-host and x-tunnel-id headers are required
+      // x-tunnel-id and x-tunnel-tunnel headers are required
       socket.destroy()
       return
     }
-
     const tunnelHostname = getHostname(tunnelHost)
-    if (tunnelHostname === '') {
+    if (isUndefined(tunnelHostname)) {
       // x-tunnel-host is not valid
       socket.destroy()
       return
     }
-    const agent = clients.get(tunnelHostname)
+    const agent = localAgents.get(tunnelHostname)
     if (isUndefined(agent)) {
       // no client listening
       socket.destroy()
@@ -80,40 +63,65 @@ export const createServer = (options: RemoteProxyOptions): HttpServer => {
       'Upgrade: tunnel\r\n' +
       '\r\n'
     )
-  })
+  }
 
-  httpServer.on('request', (req, res) => {
-    const hostname = getHostname(req.headers.host)
-    const agent = clients.get(hostname)
-    if (isUndefined(agent)) {
-      res.statusCode = 404
-      res.end()
+  proxyServer.on('upgrade', (req: Req, socket: TcpSocket, head: Buffer) => {
+    const reqHostname = getHostname(req.headers.host)
+    if (isUndefined(reqHostname)) {
+      // host header is required
+      socket.destroy()
       return
     }
-    const { method, url, headers } = req
-    const reqOptions = { method, url, headers, agent }
-    const cReq = request(reqOptions, cRes => {
-      res.writeHead(cRes.statusCode, cRes.headers)
-      cRes.pipe(res)
-    })
-    req.pipe(cReq)
+    if (req.headers.upgrade === '@http-public/tunnel') {
+      handleTunnelUpgrade(req, socket)
+      return
+    }
+    if (reqHostname === serverHostname) {
+      // a local client is connecting
+      handleClientUpgrade(req, socket, head)
+      return
+    }
+    // TODO: a remote client is upgrading
+    // only tunnels and websockets allowed
+    socket.destroy()
   })
 
-  return httpServer
+  proxyServer.on('request', (proxyReq: Req, proxyRes: ServerResponse) => {
+    const hostname = getHostname(proxyReq.headers.host)
+    if (isUndefined(hostname)) {
+      // host header is required
+      proxyRes.writeHead(404).end()
+      return
+    }
+    const agent = localAgents.get(hostname)
+    if (isUndefined(agent)) {
+      // no localAgents are serving this hostname
+      proxyRes.writeHead(404).end()
+      return
+    }
+    const { method, url, headers } = proxyReq
+    const remoteReqOptions = { method, url, headers, agent }
+    const remoteReq = request(remoteReqOptions, remoteRes => {
+      proxyRes.writeHead(remoteRes.statusCode!, remoteRes.headers)
+      remoteRes.pipe(proxyRes)
+    })
+    proxyReq.pipe(remoteReq)
+  })
+
+  return proxyServer
 }
 
-function getHostname(hostHeader?: string): string {
-  if (isUndefined(hostHeader)) return ''
+const getHostname = (value: unknown): string | undefined => {
+  if (!isString(value)) return
   try {
-    return new URL(`http://${hostHeader}`).hostname
+    return new URL(`http://${value}`).hostname
   } catch (err) {}
-  return ''
 }
 
-function isUndefined(value: unknown): value is void {
+const isUndefined = (value: unknown): value is void => {
   return typeof value === 'undefined'
 }
 
-function isString(value: unknown): value is string {
+const isString = (value: unknown): value is string => {
   return typeof value === 'string'
 }

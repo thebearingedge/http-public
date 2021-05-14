@@ -1,6 +1,7 @@
-import { AddressInfo } from 'net'
+import { AddressInfo, connect } from 'net'
 import { request, Server as HttpServer } from 'http'
 import WebSocket from 'ws'
+import { v4 as uuid } from 'uuid'
 import chai, { expect } from 'chai'
 import { chaiStruct } from 'chai-struct'
 import { createServer } from './create-server'
@@ -9,89 +10,173 @@ chai.use(chaiStruct)
 
 describe('createServer', () => {
 
-  let proxyServer: HttpServer
-  let proxyServerPort: number
-  let proxyServerHost: string
+  let proxy: HttpServer
+  let proxyPort: number
+  let proxyHost: string
   let localServer: HttpServer
 
   beforeEach('start server', done => {
     const serverOptions = {
       hostname: 'localhost'
     }
-    proxyServer = createServer(serverOptions).listen(0, '127.0.0.1', () => {
-      const { port } = proxyServer.address() as AddressInfo
-      proxyServerPort = port
-      proxyServerHost = `http://localhost:${port}`
+    proxy = createServer(serverOptions).listen(0, '127.0.0.1', () => {
+      const { port } = proxy.address() as AddressInfo
+      proxyPort = port
+      proxyHost = `http://localhost:${port}`
       localServer = new HttpServer().listen(0, '127.0.0.1', done)
     })
   })
 
   afterEach('stop server', done => {
-    proxyServer.close(() => localServer.close(done))
+    proxy.close(() => localServer.close(done))
   })
 
-  it('requires a valid host header', done => {
-    const reqOptions = {
-      port: proxyServerPort,
-      headers: {
-        connection: 'upgrade',
-        upgrade: 'websocket'
+  describe('upgrade requests', () => {
+
+    describe('all upgrades', () => {
+
+      it('requires a valid host header', done => {
+        const socket = connect({
+          host: 'localhost',
+          port: proxyPort
+        })
+        socket.write(
+          'GET / HTTP/1.1\r\n' +
+          'Connection: upgrade\r\n' +
+          'Upgrade: unsupprted\r\n\r\n'
+        )
+        socket.once('error', done)
+        socket.once('close', () => done())
+      })
+
+    })
+
+    describe('control upgrades', () => {
+
+      it('require an x-remote-hostname header', done => {
+        const reqOptions = {
+          port: proxyPort,
+          headers: {
+            connection: 'upgrade',
+            upgrade: 'websocket'
+          }
+        }
+        const req = request(reqOptions).once('error', err => {
+          expect(err).to.have.property('message', 'socket hang up')
+          done()
+        })
+        req.end()
+      })
+
+      it('accepts a control connection over websockets', done => {
+        const client = new WebSocket(proxyHost, {
+          headers: { 'x-remote-hostname': 'test.localhost' }
+        })
+        client.once('open', () => {
+          client.terminate()
+          done()
+        })
+      })
+
+    })
+
+    describe('tunnel upgrades', () => {
+
+      it('require x-tunnel-id and x-tunnel-host headers', done => {
+        const reqOptions = {
+          port: proxyPort,
+          headers: {
+            connection: 'upgrade',
+            upgrade: '@http-public/tunnel'
+          }
+        }
+        const req = request(reqOptions).once('error', err => {
+          expect(err).to.have.property('message', 'socket hang up')
+          done()
+        })
+        req.end()
+      })
+
+      it('ignores requests to invalid hostnames', done => {
+        const reqOptions = {
+          port: proxyPort,
+          headers: {
+            host: 'localhost',
+            connection: 'upgrade',
+            upgrade: '@http-public/tunnel',
+            'x-tunnel-id': uuid(),
+            'x-tunnel-host': ''
+          }
+        }
+        const req = request(reqOptions).once('error', err => {
+          expect(err).to.have.property('message', 'socket hang up')
+          done()
+        })
+        req.end()
+      })
+
+      it('ignores requests to unknown hostnames', done => {
+        const reqOptions = {
+          port: proxyPort,
+          headers: {
+            host: 'localhost',
+            connection: 'upgrade',
+            upgrade: '@http-public/tunnel',
+            'x-tunnel-id': uuid(),
+            'x-tunnel-host': 'unknown.localhost'
+          }
+        }
+        const req = request(reqOptions).once('error', err => {
+          expect(err).to.have.property('message', 'socket hang up')
+          done()
+        })
+        req.end()
+      })
+
+    })
+
+  })
+
+  describe('http requests', () => {
+
+    it('requires a valid x-remote-hostname header', done => {
+      const reqOptions = {
+        port: proxyPort,
+        headers: {
+          connection: 'upgrade',
+          upgrade: 'websocket',
+          'x-remote-hostname': ''
+        }
       }
-    }
-    const req = request(reqOptions)
-    req.once('error', err => {
-      expect(err).to.have.property('message', 'socket hang up')
-      done()
+      const req = request(reqOptions).once('error', err => {
+        expect(err).to.have.property('message', 'socket hang up')
+        done()
+      })
+      req.end()
     })
-    req.end()
-  })
 
-  it('requires a valid x-remote-hostname header', done => {
-    const reqOptions = {
-      port: proxyServerPort,
-      headers: {
-        connection: 'upgrade',
-        upgrade: 'websocket'
+    it('ignores requests to unknown hostnames', done => {
+      const reqOptions = {
+        port: proxyPort,
+        headers: { host: 'unknown.localhost' }
       }
-    }
-    const req = request(reqOptions)
-    req.once('error', err => {
-      expect(err).to.have.property('message', 'socket hang up')
-      done()
+      const req = request(reqOptions, res => {
+        expect(res).to.have.property('statusCode', 404)
+        done()
+      })
+      req.end()
     })
-    req.end()
-  })
 
-  it('accepts a control connection over websockets', done => {
-    const controller = new WebSocket(proxyServerHost, {
-      headers: { 'x-remote-hostname': 'test.localhost' }
-    })
-    controller.once('open', () => {
-      controller.terminate()
-      done()
-    })
-  })
-
-  it('ignores requests to unknown hostnames', done => {
-    const reqOptions = {
-      port: proxyServerPort,
-      headers: { host: 'unknown.localhost' }
-    }
-    const req = request(reqOptions, res => {
-      expect(res).to.have.property('statusCode', 404)
-      done()
-    })
-    req.end()
   })
 
   it('requests new connections from the local client', done => {
-    const controller = new WebSocket(proxyServerHost, {
+    const client = new WebSocket(proxyHost, {
       headers: { 'x-remote-hostname': 'test.localhost' }
     })
-    controller.once('message', (data: string) => {
+    client.once('message', (data: string) => {
       const message = JSON.parse(data)
       expect(message).to.have.structure({
-        event: 'client_connection_requested',
+        event: 'tunnel_connection_requested',
         payload: {
           tunnelId: String,
           remoteHostname: 'test.localhost'
@@ -99,18 +184,18 @@ describe('createServer', () => {
       })
       const { tunnelId, remoteHostname } = message.payload
       const tunnelReq = request({
-        port: proxyServerPort,
+        port: proxyPort,
         headers: {
           host: 'localhost',
           connection: 'upgrade',
-          upgrade: 'tunnel',
+          upgrade: '@http-public/tunnel',
           'x-tunnel-id': tunnelId,
           'x-tunnel-host': remoteHostname
         }
       })
       tunnelReq.once('upgrade', (_, socket) => {
-        controller.send(JSON.stringify({
-          event: 'client_connection_established',
+        client.send(JSON.stringify({
+          event: 'tunnel_connection_established',
           payload: { tunnelId }
         }))
         socket.once('data', () => {
@@ -119,13 +204,13 @@ describe('createServer', () => {
       })
       tunnelReq.end()
     })
-    controller.once('open', () => {
+    client.once('open', () => {
       const remoteReq = request({
-        port: proxyServerPort,
+        port: proxyPort,
         headers: { host: 'test.localhost' }
       }, res => {
         expect(res).to.have.property('statusCode', 418)
-        controller.terminate()
+        client.terminate()
         done()
       })
       remoteReq.end()
