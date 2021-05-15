@@ -15,7 +15,7 @@ type ProxyServerOptions = {
 
 export const createServer = (options: ProxyServerOptions): HttpServer => {
 
-  const { hostname: proxyHostname } = options
+  const { hostname: proxyHost } = options
   const proxyServer = new HttpServer()
   const tunnelAgents = new Map<string, TunnelAgent>()
 
@@ -24,28 +24,28 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
   })
 
   proxyServer.on('upgrade', (req: Req, socket: TcpSocket) => {
-    const remoteHostname = getHostname(req.headers.host)
-    if (isUndefined(remoteHostname)) {
+    const remoteHost = getHostname(req.headers.host)
+    if (isUndefined(remoteHost)) {
       // host header is required
       socket.destroy()
       return
     }
-    if (remoteHostname === proxyHostname) {
+    if (remoteHost === proxyHost) {
       // a tunnel is being opened
       if (req.headers.upgrade !== '@http-public/tunnel') {
         // protocol not supported
         socket.destroy()
         return
       }
-      const tunnelHostname = getHostname(req.headers['@http-public/tunnel'])
-      if (isUndefined(tunnelHostname)) {
+      const tunnelHost = getHostname(req.headers['@http-public/tunnel'])
+      if (isUndefined(tunnelHost)) {
         // @http-public/tunnel header is required
         socket.destroy()
         return
       }
-      const agent = tunnelAgents.get(tunnelHostname)
+      const agent = tunnelAgents.get(tunnelHost)
       if (isUndefined(agent)) {
-        // no client agents are serving this hostname
+        // no tunnel agents are serving this hostname
         socket.destroy()
         return
       }
@@ -55,18 +55,20 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
         'Upgrade: @http-public/tunnel\r\n' +
         '\r\n'
       )
+      // persist the tunnel connection for this hostname
       agent.emit('tunnel', socket)
       return
     }
-    const agent = tunnelAgents.get(remoteHostname)
+    const agent = tunnelAgents.get(remoteHost)
     if (isUndefined(agent)) {
-      // no client agents are serving this hostname
+      // no tunnel agents are serving this hostname
       socket.destroy()
       return
     }
-    agent.createConnection(null, (err, _socket) => {
+    // get one of the agent's open connections
+    agent.createConnection(null, (err, _tunnel) => {
       if (err !== null) return socket.destroy()
-      const tunnel = _socket as TcpSocket
+      const tunnel = _tunnel as TcpSocket
       if (!socket.readable || !socket.writable) {
         tunnel.destroy()
         socket.destroy()
@@ -74,6 +76,7 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       }
       pipeline(socket, tunnel, noop)
       pipeline(tunnel, socket, noop)
+      // forward the upgrade request through the tunnel
       const reqMessage = [
         `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`,
         ...req.rawHeaders.map(([key, value]) => `${key}: ${value}\r\n`),
@@ -84,31 +87,31 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
   })
 
   proxyServer.on('request', (proxyReq: Req, proxyRes: Res) => {
-    const targetHostname = getHostname(proxyReq.headers.host)
-    if (isUndefined(targetHostname)) {
+    const targetHost = getHostname(proxyReq.headers.host)
+    if (isUndefined(targetHost)) {
       // host header is required
       proxyRes.writeHead(400).end()
       return
     }
-    if (targetHostname === proxyHostname) {
-      const remoteHostname = getHostname(proxyReq.headers['@http-public/tunnel'])
-      if (isUndefined(remoteHostname)) {
+    if (targetHost === proxyHost) {
+      const remoteHost = getHostname(proxyReq.headers['@http-public/tunnel'])
+      if (isUndefined(remoteHost)) {
         // @http-public/tunnel header is required
         proxyRes.writeHead(400).end()
         return
       }
-      if (tunnelAgents.has(remoteHostname)) {
+      if (tunnelAgents.has(remoteHost)) {
         // this remote hostname is already taken
         proxyRes.writeHead(409).end()
         return
       }
-      tunnelAgents.set(remoteHostname, new TunnelAgent())
+      tunnelAgents.set(remoteHost, new TunnelAgent())
       proxyRes.end()
       return
     }
-    const agent = tunnelAgents.get(targetHostname)
+    const agent = tunnelAgents.get(targetHost)
     if (isUndefined(agent)) {
-      // no client agents are serving this hostname
+      // no tunnel agents are serving this hostname
       proxyRes.writeHead(404).end()
       return
     }
