@@ -12,12 +12,12 @@ export interface TunnelAgent extends EventEmitter, Agent {}
 export class TunnelAgent extends Agent {
 
   private tunnels: TcpSocket[]
-  private awaitingConnections: OnConnection[]
+  private connectionCallbacks: OnConnection[]
 
   constructor(options: AgentOptions = {}) {
     super({ ...options, keepAlive: true, maxFreeSockets: 1 })
     this.tunnels = []
-    this.awaitingConnections = []
+    this.connectionCallbacks = []
     this.on('close', this.handleClose)
     this.on('tunnel', this.handleTunnel)
   }
@@ -32,18 +32,18 @@ export class TunnelAgent extends Agent {
 
   private readonly handleClose = (): void => {
     this.tunnels.forEach(socket => socket.destroy())
-    this.awaitingConnections.forEach(onConnection => {
+    this.connectionCallbacks.forEach(onConnection => {
       onConnection(new Error('agent closed'))
     })
     this.tunnels = []
-    this.awaitingConnections = []
+    this.connectionCallbacks = []
     this.destroy()
   }
 
   private readonly handleTunnel = (socket: TcpSocket): void => {
     socket.once('close', this.handleSocketClose(socket))
     socket.once('error', this.handleSocketError(socket))
-    const onConnection = this.awaitingConnections.shift()
+    const onConnection = this.connectionCallbacks.shift()
     if (isUndefined(onConnection)) {
       this.tunnels.push(socket)
       return
@@ -54,7 +54,7 @@ export class TunnelAgent extends Agent {
   createConnection(_: unknown, onConnection: OnConnection): void {
     const socket = this.tunnels.shift()
     if (isUndefined(socket)) {
-      this.awaitingConnections.push(onConnection)
+      this.connectionCallbacks.push(onConnection)
       return
     }
     setImmediate(onConnection, null, socket)

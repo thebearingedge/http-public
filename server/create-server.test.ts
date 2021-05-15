@@ -1,6 +1,5 @@
 import { AddressInfo, connect } from 'net'
 import { request, Server as HttpServer } from 'http'
-import WebSocket from 'ws'
 import { expect } from 'chai'
 import { createServer } from './create-server'
 
@@ -8,7 +7,6 @@ describe('createServer', () => {
 
   let proxy: HttpServer
   let proxyPort: number
-  let proxyHost: string
   let localServer: HttpServer
 
   beforeEach('start server', done => {
@@ -18,7 +16,6 @@ describe('createServer', () => {
     proxy = createServer(serverOptions).listen(0, '127.0.0.1', () => {
       const { port } = proxy.address() as AddressInfo
       proxyPort = port
-      proxyHost = `http://localhost:${port}`
       localServer = new HttpServer().listen(0, '127.0.0.1', done)
     })
   })
@@ -78,16 +75,6 @@ describe('createServer', () => {
           done()
         })
         req.end()
-      })
-
-      it('accepts a control connection over websockets', done => {
-        const client = new WebSocket(proxyHost, {
-          headers: { 'x-remote-hostname': 'test.localhost' }
-        })
-        client.once('open', () => {
-          client.terminate()
-          done()
-        })
       })
 
     })
@@ -176,47 +163,6 @@ describe('createServer', () => {
       req.end()
     })
 
-  })
-
-  it('requests new connections from the local client', done => {
-    const client = new WebSocket(proxyHost, {
-      headers: { 'x-remote-hostname': 'test.localhost' }
-    })
-    client.once('message', (data: string) => {
-      const message = JSON.parse(data)
-      const { tunnelId, remoteHostname } = message.payload
-      const tunnelReq = request({
-        port: proxyPort,
-        headers: {
-          host: 'localhost',
-          connection: 'upgrade',
-          upgrade: '@http-public/tunnel',
-          'x-tunnel-id': tunnelId,
-          'x-tunnel-hostname': remoteHostname
-        }
-      })
-      tunnelReq.once('upgrade', (_, socket) => {
-        client.send(JSON.stringify({
-          event: 'tunnel_connection_established',
-          payload: { tunnelId }
-        }))
-        socket.once('data', () => {
-          socket.end("HTTP/1.1 418 I'm a teapot\r\n\r\n")
-        })
-      })
-      tunnelReq.end()
-    })
-    client.once('open', () => {
-      const remoteReq = request({
-        port: proxyPort,
-        headers: { host: 'test.localhost' }
-      }, res => {
-        expect(res).to.have.property('statusCode', 418)
-        client.terminate()
-        done()
-      })
-      remoteReq.end()
-    })
   })
 
 })

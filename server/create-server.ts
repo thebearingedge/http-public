@@ -6,8 +6,8 @@ import {
 } from 'http'
 import { pipeline } from 'stream'
 import { Socket as TcpSocket } from 'net'
-import { TunnelAgent } from './client-agent'
-import { isUndefined, getHostname } from './util'
+import { TunnelAgent } from './tunnel-agent'
+import { noop, getHostname, isUndefined } from './util'
 
 type ProxyServerOptions = {
   hostname: string
@@ -72,8 +72,8 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
         socket.destroy()
         return
       }
-      pipeline(socket, tunnel)
-      pipeline(tunnel, socket)
+      pipeline(socket, tunnel, noop)
+      pipeline(tunnel, socket, noop)
       const reqMessage = [
         `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`,
         ...req.rawHeaders.map(([key, value]) => `${key}: ${value}\r\n`),
@@ -117,9 +117,9 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
     const remoteReqOptions = { method, url, headers, agent }
     const remoteReq = request(remoteReqOptions, remoteRes => {
       proxyRes.writeHead(remoteRes.statusCode!, remoteRes.headers)
-      pipeline(remoteRes, proxyRes)
+      pipeline(remoteRes, proxyRes, noop)
     })
-    pipeline(proxyReq, remoteReq)
+    pipeline(proxyReq, remoteReq, noop)
   })
 
   return proxyServer

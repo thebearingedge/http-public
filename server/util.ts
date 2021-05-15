@@ -12,3 +12,5 @@ export const isUndefined = (value: unknown): value is void => {
 export const isString = (value: unknown): value is string => {
   return typeof value === 'string'
 }
+
+export const noop = (...args: any[]): void => {}
