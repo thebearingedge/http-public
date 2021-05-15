@@ -19,6 +19,8 @@ export class ClientAgent extends Agent {
 
   private readonly client: WebSocket
   private readonly remoteHostname: string
+  private readonly connections: TcpSocket[]
+  private readonly awaitingConnection: OnConnection[]
   private readonly requestedTunnels: Set<string>
   private readonly connectingTunnels: Map<string, TcpSocket>
 
@@ -27,6 +29,8 @@ export class ClientAgent extends Agent {
     super({ ...agentOptions, keepAlive: true, maxFreeSockets: 1 })
     this.client = client
     this.remoteHostname = remoteHostname
+    this.connections = []
+    this.awaitingConnection = []
     this.requestedTunnels = new Set()
     this.connectingTunnels = new Map()
     this.client.once('close', () => this.destroy())
