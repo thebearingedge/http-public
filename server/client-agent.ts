@@ -1,75 +1,63 @@
 import EventEmitter from 'events'
 import { Socket as TcpSocket } from 'net'
 import { Agent, AgentOptions } from 'http'
-import WebSocket from 'ws'
-import { v4 as uuid } from 'uuid'
-
-type ClientAgentOptions = AgentOptions & {
-  client: WebSocket
-  remoteHostname: string
-}
+import { isUndefined } from './util'
 
 type OnConnection = {
   (err: Error | null, socket?: TcpSocket): void
 }
 
-export interface ClientAgent extends EventEmitter, Agent {}
+export interface TunnelAgent extends EventEmitter, Agent {}
 
-export class ClientAgent extends Agent {
+export class TunnelAgent extends Agent {
 
-  private readonly client: WebSocket
-  private readonly remoteHostname: string
-  private readonly connections: TcpSocket[]
-  private readonly awaitingConnection: OnConnection[]
-  private readonly requestedTunnels: Set<string>
-  private readonly connectingTunnels: Map<string, TcpSocket>
+  private tunnels: TcpSocket[]
+  private awaitingConnections: OnConnection[]
 
-  constructor(options: ClientAgentOptions) {
-    const { client, remoteHostname, ...agentOptions } = options
-    super({ ...agentOptions, keepAlive: true, maxFreeSockets: 1 })
-    this.client = client
-    this.remoteHostname = remoteHostname
-    this.connections = []
-    this.awaitingConnection = []
-    this.requestedTunnels = new Set()
-    this.connectingTunnels = new Map()
-    this.client.once('close', () => this.destroy())
+  constructor(options: AgentOptions = {}) {
+    super({ ...options, keepAlive: true, maxFreeSockets: 1 })
+    this.tunnels = []
+    this.awaitingConnections = []
+    this.on('close', this.handleClose)
+    this.on('tunnel', this.handleTunnel)
   }
 
-  createConnection(_: unknown, callback: OnConnection): void {
+  private readonly handleSocketClose = (socket: TcpSocket) => (): void => {
+    this.tunnels = this.tunnels.filter(_socket => _socket !== socket)
+  }
 
-    const { remoteHostname, client } = this
-    const tunnelId = uuid()
-    const message = JSON.stringify({
-      event: 'tunnel_connection_requested',
-      payload: { tunnelId, remoteHostname }
+  private readonly handleSocketError = (socket: TcpSocket) => (): void => {
+    socket.destroy()
+  }
+
+  private readonly handleClose = (): void => {
+    this.tunnels.forEach(socket => socket.destroy())
+    this.awaitingConnections.forEach(onConnection => {
+      onConnection(new Error('agent closed'))
     })
-
-    const handleTunnelConnecting = (socket: TcpSocket): void => {
-      this.requestedTunnels.delete(tunnelId)
-      this.connectingTunnels.set(tunnelId, socket)
-    }
-
-    const handleTunnelEstablished = (message: string): void => {
-      const { event, payload } = JSON.parse(message)
-      if (event !== 'tunnel_connection_established' ||
-          payload.tunnelId !== tunnelId) {
-        return
-      }
-      this.client.off('message', handleTunnelEstablished)
-      const socket = this.connectingTunnels.get(tunnelId)!
-      this.connectingTunnels.delete(tunnelId)
-      callback(null, socket)
-    }
-
-    this.requestedTunnels.add(tunnelId)
-    this.once(`tunnel-${tunnelId}`, handleTunnelConnecting)
-    this.client.on('message', handleTunnelEstablished)
-    client.send(message)
+    this.tunnels = []
+    this.awaitingConnections = []
+    this.destroy()
   }
 
-  expectsTunnel(tunnelId: string): boolean {
-    return this.requestedTunnels.has(tunnelId)
+  private readonly handleTunnel = (socket: TcpSocket): void => {
+    socket.once('close', this.handleSocketClose(socket))
+    socket.once('error', this.handleSocketError(socket))
+    const onConnection = this.awaitingConnections.shift()
+    if (isUndefined(onConnection)) {
+      this.tunnels.push(socket)
+      return
+    }
+    setImmediate(onConnection, null, socket)
+  }
+
+  createConnection(_: unknown, onConnection: OnConnection): void {
+    const socket = this.tunnels.shift()
+    if (isUndefined(socket)) {
+      this.awaitingConnections.push(onConnection)
+      return
+    }
+    setImmediate(onConnection, null, socket)
   }
 
 }

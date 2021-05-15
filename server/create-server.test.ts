@@ -1,12 +1,8 @@
 import { AddressInfo, connect } from 'net'
 import { request, Server as HttpServer } from 'http'
 import WebSocket from 'ws'
-import { v4 as uuid } from 'uuid'
-import chai, { expect } from 'chai'
-import { chaiStruct } from 'chai-struct'
+import { expect } from 'chai'
 import { createServer } from './create-server'
-
-chai.use(chaiStruct)
 
 describe('createServer', () => {
 
@@ -43,7 +39,7 @@ describe('createServer', () => {
         socket.write(
           'GET / HTTP/1.1\r\n' +
           'Connection: upgrade\r\n' +
-          'Upgrade: unsupprted\r\n\r\n'
+          'Upgrade: unsupported\r\n\r\n'
         )
         socket.once('error', done)
         socket.once('close', () => done())
@@ -120,7 +116,6 @@ describe('createServer', () => {
             host: 'localhost',
             connection: 'upgrade',
             upgrade: '@http-public/tunnel',
-            'x-tunnel-id': uuid(),
             'x-tunnel-hostname': ''
           }
         }
@@ -138,7 +133,6 @@ describe('createServer', () => {
             host: 'localhost',
             connection: 'upgrade',
             upgrade: '@http-public/tunnel',
-            'x-tunnel-id': uuid(),
             'x-tunnel-hostname': 'unknown.localhost'
           }
         }
@@ -190,13 +184,6 @@ describe('createServer', () => {
     })
     client.once('message', (data: string) => {
       const message = JSON.parse(data)
-      expect(message).to.have.structure({
-        event: 'tunnel_connection_requested',
-        payload: {
-          tunnelId: String,
-          remoteHostname: 'test.localhost'
-        }
-      })
       const { tunnelId, remoteHostname } = message.payload
       const tunnelReq = request({
         port: proxyPort,
