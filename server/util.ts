@@ -2,7 +2,7 @@ export const getHostname = (value: unknown): string | undefined => {
   if (!isString(value)) return
   try {
     return new URL(`http://${value}`).hostname
-  } catch (err) { }
+  } catch (err) {}
 }
 
 export const isUndefined = (value: unknown): value is void => {

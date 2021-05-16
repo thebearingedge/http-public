@@ -23,11 +23,12 @@ export class TunnelAgent extends Agent {
   }
 
   private readonly handleSocketClose = (socket: TcpSocket) => (): void => {
+    socket.destroy()
     this.tunnels = this.tunnels.filter(_socket => _socket !== socket)
   }
 
   private readonly handleSocketError = (socket: TcpSocket) => (): void => {
-    socket.destroy()
+    socket.emit('close')
   }
 
   private readonly handleClose = (): void => {
@@ -35,14 +36,14 @@ export class TunnelAgent extends Agent {
     this.connectionCallbacks.forEach(onConnection => {
       onConnection(new Error('agent closed'))
     })
+    this.destroy()
     this.tunnels = []
     this.connectionCallbacks = []
-    this.destroy()
   }
 
   private readonly handleTunnel = (socket: TcpSocket): void => {
-    socket.once('close', this.handleSocketClose(socket))
     socket.once('error', this.handleSocketError(socket))
+    socket.once('close', this.handleSocketClose(socket))
     const onConnection = this.connectionCallbacks.shift()
     if (isUndefined(onConnection)) {
       // nobody is waiting for this connection
@@ -50,7 +51,7 @@ export class TunnelAgent extends Agent {
       this.tunnels.push(socket)
       return
     }
-    setImmediate(onConnection, null, socket)
+    setTimeout(onConnection, 0, null, socket)
   }
 
   createConnection(_: unknown, onConnection: OnConnection): void {
@@ -61,7 +62,7 @@ export class TunnelAgent extends Agent {
       this.connectionCallbacks.push(onConnection)
       return
     }
-    setImmediate(onConnection, null, socket)
+    setTimeout(onConnection, 0, null, socket)
   }
 
 }
