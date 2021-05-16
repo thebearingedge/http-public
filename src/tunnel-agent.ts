@@ -46,23 +46,19 @@ export class TunnelAgent extends Agent {
     socket.once('close', this.handleSocketClose(socket))
     const onConnection = this.connectionCallbacks.shift()
     if (isUndefined(onConnection)) {
-      // nobody is waiting for this connection
-      // add it to the pool
       this.tunnels.push(socket)
       return
     }
-    defer(onConnection, null, socket) // this feels hacky
+    defer(onConnection, null, socket) // hack?
   }
 
   createConnection(_: unknown, onConnection: OnConnection): void {
     const socket = this.tunnels.shift()
     if (isUndefined(socket)) {
-      // no connection available right now
-      // queue the callback for when one is opened
       this.connectionCallbacks.push(onConnection)
       return
     }
-    defer(onConnection, null, socket) // this feels hacky
+    defer(onConnection, null, socket) // hack?
   }
 
 }
