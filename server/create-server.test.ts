@@ -1,37 +1,40 @@
 import { pipeline } from 'stream'
 import { request, Server as HttpServer } from 'http'
 import { connect, AddressInfo, Socket as TcpSocket } from 'net'
+import WebSocket, { Server as WebSocketServer } from 'ws'
 import { expect } from 'chai'
 import { noop } from './util'
 import { createServer } from './create-server'
 
-const LOCALHOST = '127.0.0.1'
-
 describe('createServer', () => {
 
-  let proxy: HttpServer
   let proxyPort: number
-  let local: HttpServer
+  let proxyServer: HttpServer
   let localPort: number
+  let localServer: HttpServer
+  let localSocket: TcpSocket
+  let localWebSocketServer: WebSocketServer
 
   beforeEach('start servers', done => {
     const serverOptions = {
       hostname: 'localhost'
     }
-    proxy = createServer(serverOptions).listen(0, LOCALHOST, () => {
-      ({ port: proxyPort } = proxy.address() as AddressInfo)
-      local = new HttpServer((_, res) => {
-        res.writeHead(418).end()
-        res.end()
-      }).listen(0, LOCALHOST, () => {
-        ({ port: localPort } = local.address() as AddressInfo)
-        done()
+    proxyServer = createServer(serverOptions).listen(() => {
+      ({ port: proxyPort } = proxyServer.address() as AddressInfo)
+      localServer = new HttpServer((_, res) => res.end())
+      localWebSocketServer = new WebSocketServer({ server: localServer })
+      localWebSocketServer.on('connection', ws => ws.send('success!'))
+      localServer.listen(() => {
+        ({ port: localPort } = localServer.address() as AddressInfo)
+        localSocket = connect({ port: localPort })
+        localSocket.once('ready', done)
       })
     })
   })
 
   afterEach('stop servers', done => {
-    proxy.close(() => local.close(done))
+    localSocket.destroy()
+    proxyServer.close(() => localServer.close(done))
   })
 
   describe('on upgrade', () => {
@@ -137,8 +140,7 @@ describe('createServer', () => {
               'x-tunnel-hostname': 'new.localhost'
             }
           }
-          const req = request(reqOptions).once('upgrade', (res, socket) => {
-            expect(res).to.have.property('statusCode', 101)
+          const req = request(reqOptions).once('upgrade', (_, socket) => {
             socket.destroy()
             done()
           })
@@ -152,7 +154,7 @@ describe('createServer', () => {
 
     describe('remote upgrades', () => {
 
-      context('when no tunnel has been created for the hostname', () => {
+      context('when no agent has been created for the hostname', () => {
 
         it('responds with a 404 error', done => {
           const reqOptions = {
@@ -165,15 +167,60 @@ describe('createServer', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 404)
-            expect(res.headers).to.deep.equal({
-              connection: 'close'
-            })
+            expect(res.headers).to.deep.equal({ connection: 'close' })
             done()
-          }).once('error', done)
+          })
+          req.once('error', done)
           req.end()
         })
 
       })
+
+      context('when a tunnel connection is available for the hostname', () => {
+
+        beforeEach(done => {
+          const clientReqOptions = {
+            port: proxyPort,
+            headers: {
+              'x-tunnel-hostname': 'new.localhost'
+            }
+          }
+          const clientReq = request(clientReqOptions, res => {
+            expect(res).to.have.property('statusCode', 201)
+            const tunnelReqOptions = {
+              port: proxyPort,
+              headers: {
+                connection: 'upgrade',
+                upgrade: '@http-public/tunnel',
+                'x-tunnel-hostname': 'new.localhost'
+              }
+            }
+            const tunnelReq = request(tunnelReqOptions)
+            tunnelReq.once('upgrade', (_, tunnelSocket) => {
+              pipeline(tunnelSocket, localSocket, tunnelSocket, noop)
+              done()
+            })
+            tunnelReq.once('error', done)
+            tunnelReq.end()
+          })
+          clientReq.once('error', done)
+          clientReq.end()
+        })
+
+        it('proxies the upgraded connection', done => {
+          const webSocket = new WebSocket(`ws://localhost:${proxyPort}`, {
+            headers: {
+              host: 'new.localhost'
+            }
+          })
+          webSocket.on('message', data => {
+            expect(String(data)).to.equal('success!')
+            done()
+          })
+        })
+
+      })
+
     })
 
   })
@@ -217,8 +264,6 @@ describe('createServer', () => {
 
       context('when no tunnels are available for the hostname', () => {
 
-        let localSocket: TcpSocket
-
         beforeEach(done => {
           const reqOptions = {
             port: proxyPort,
@@ -228,14 +273,8 @@ describe('createServer', () => {
           }
           const req = request(reqOptions)
           req.once('error', done)
-          req.end(() => {
-            localSocket = connect({ port: localPort })
-            localSocket.once('error', done)
-            localSocket.once('ready', done)
-          })
+          req.end(done)
         })
-
-        afterEach(() => localSocket.destroy())
 
         it('queues the request', done => {
           const remoteReqOptions = {
@@ -245,7 +284,7 @@ describe('createServer', () => {
             }
           }
           const remoteReq = request(remoteReqOptions, res => {
-            expect(res).to.have.property('statusCode', 418)
+            expect(res).to.have.property('statusCode', 200)
             done()
           })
           remoteReq.once('error', done)
@@ -274,35 +313,34 @@ describe('createServer', () => {
         let localSocket: TcpSocket
 
         beforeEach(done => {
-          const agentReqOptions = {
+          const clientReqOptions = {
             port: proxyPort,
             headers: {
               'x-tunnel-hostname': 'new.localhost'
             }
           }
-          const agentReq = request(agentReqOptions)
-          agentReq.once('error', done)
-          agentReq.end(() => {
-            localSocket = connect({ port: localPort })
-            localSocket.once('error', done)
-            localSocket.once('ready', () => {
-              const reqOptions = {
-                port: proxyPort,
-                headers: {
-                  connection: 'upgrade',
-                  upgrade: '@http-public/tunnel',
-                  'x-tunnel-hostname': 'new.localhost'
-                }
+          localSocket = connect({ port: localPort })
+          localSocket.once('error', done)
+          const clientReq = request(clientReqOptions, res => {
+            expect(res).to.have.property('statusCode', 201)
+            const tunnelReqOptions = {
+              port: proxyPort,
+              headers: {
+                connection: 'upgrade',
+                upgrade: '@http-public/tunnel',
+                'x-tunnel-hostname': 'new.localhost'
               }
-              const tunnelReq = request(reqOptions)
-              tunnelReq.once('upgrade', (_, tunnelSocket) => {
-                pipeline(tunnelSocket, localSocket, tunnelSocket, noop)
-                done()
-              })
-              tunnelReq.once('error', done)
-              tunnelReq.end()
+            }
+            const tunnelReq = request(tunnelReqOptions)
+            tunnelReq.once('upgrade', (_, tunnelSocket) => {
+              pipeline(tunnelSocket, localSocket, tunnelSocket, noop)
+              done()
             })
+            tunnelReq.once('error', done)
+            tunnelReq.end()
           })
+          clientReq.once('error', done)
+          clientReq.end()
         })
 
         afterEach(() => localSocket.destroy())
@@ -315,7 +353,7 @@ describe('createServer', () => {
             }
           }
           const req = request(reqOptions, res => {
-            expect(res).to.have.property('statusCode', 418)
+            expect(res).to.have.property('statusCode', 200)
             done()
           })
           req.once('error', done)
@@ -329,6 +367,7 @@ describe('createServer', () => {
     describe('client requests', () => {
 
       context('when the x-tunnel-hostname header is not set', () => {
+
         it('responds with a 400 error', done => {
           const reqOptions = {
             port: proxyPort
@@ -340,9 +379,28 @@ describe('createServer', () => {
           req.once('error', done)
           req.end()
         })
+
       })
 
-      context('when the tunnel hostname is not occupied', () => {
+      context('when the x-tunnel-hostname header is invalid', () => {
+
+        it('responds with a 400 error', done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: {
+              'x-tunnel-hostname': '@'
+            }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 400)
+            done()
+          })
+          req.once('error', done)
+          req.end()
+        })
+      })
+
+      context('when the tunnel hostname is available', () => {
 
         it('responds with a 201 success', done => {
           const reqOptions = {
@@ -361,7 +419,7 @@ describe('createServer', () => {
 
       })
 
-      context('when the tunnel hostname is already occupied', () => {
+      context('when the tunnel hostname is occupied', () => {
 
         beforeEach(done => {
           const reqOptions = {

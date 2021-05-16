@@ -7,7 +7,7 @@ import {
 import { pipeline } from 'stream'
 import { Socket as TcpSocket } from 'net'
 import { TunnelAgent } from './tunnel-agent'
-import { noop, getHostname, isUndefined } from './util'
+import { getRequestHead, getHostname, noop, isUndefined } from './util'
 
 type ProxyServerOptions = {
   hostname: string
@@ -47,7 +47,7 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       }
       socket.write(
         'HTTP/1.1 101 Switching Protocols\r\n' +
-        'Connection: Upgrade\r\n' +
+        'Connection: upgrade\r\n' +
         'Upgrade: @http-public/tunnel\r\n' +
         '\r\n',
         // persist the tunnel connection for this hostname
@@ -66,9 +66,9 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       return
     }
     // get one of the agent's open connections
-    agent.createConnection(null, (err, _tunnel) => {
+    agent.createConnection(null, (err, local) => {
       if (err != null) return socket.destroy()
-      const tunnel = _tunnel as TcpSocket
+      const tunnel = local as TcpSocket
       if (!socket.readable || !socket.writable) {
         tunnel.destroy()
         socket.destroy()
@@ -76,11 +76,7 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       }
       pipeline(socket, tunnel, socket, noop)
       // forward the upgrade request through the tunnel
-      let reqHead = `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`
-      for (let i = 0; i < req.rawHeaders.length; i += 2) {
-        reqHead += `${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}\r\n`
-      }
-      reqHead += '\r\n'
+      const reqHead = getRequestHead(req)
       tunnel.write(reqHead)
     })
   })
@@ -121,6 +117,7 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       res.writeHead(tunnelRes.statusCode!, tunnelRes.headers)
       pipeline(tunnelRes, res, noop)
     })
+    tunnelReq.once('error', console.error)
     pipeline(req, tunnelReq, noop)
   })
 
