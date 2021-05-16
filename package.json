@@ -15,8 +15,7 @@
       "ts"
     ],
     "spec": [
-      "client/**/*.ts",
-      "server/**/*.ts"
+      "src/**/*.ts"
     ],
     "require": [
       "ts-node/register"

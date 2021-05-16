@@ -4,7 +4,7 @@ import { connect, AddressInfo, Socket as TcpSocket } from 'net'
 import WebSocket, { Server as WebSocketServer } from 'ws'
 import { expect } from 'chai'
 import { noop } from './util'
-import { createServer } from './create-server'
+import { createServer } from './server'
 
 describe('createServer', () => {
 
