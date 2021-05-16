@@ -221,6 +221,51 @@ describe('createServer', () => {
 
       })
 
+      context('when no tunnels are available for the hostname', () => {
+
+        beforeEach(done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: {
+              'x-tunnel-hostname': 'new.localhost'
+            }
+          }
+          const req = request(reqOptions)
+          req.once('error', done)
+          req.end(done)
+        })
+
+        it('queues the upgrade', done => {
+          const webSocket = new WebSocket(`ws://localhost:${proxyPort}`, {
+            headers: {
+              host: 'new.localhost'
+            }
+          })
+          webSocket.once('message', data => {
+            expect(String(data)).to.equal('success!')
+            done()
+          })
+          webSocket.once('error', done)
+          setTimeout(() => {
+            const tunnelReqOptions = {
+              port: proxyPort,
+              headers: {
+                connection: 'upgrade',
+                upgrade: '@http-public/tunnel',
+                'x-tunnel-hostname': 'new.localhost'
+              }
+            }
+            const tunnelReq = request(tunnelReqOptions)
+            tunnelReq.once('upgrade', (_, tunnelSocket) => {
+              pipeline(tunnelSocket, localSocket, tunnelSocket, noop)
+            })
+            tunnelReq.once('error', done)
+            tunnelReq.end()
+          })
+        })
+
+      })
+
     })
 
   })

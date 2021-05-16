@@ -66,9 +66,9 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       return
     }
     // get one of the agent's open connections
-    agent.createConnection(null, (err, local) => {
+    agent.createConnection(null, (err, _tunnel) => {
       if (err != null) return socket.destroy()
-      const tunnel = local as TcpSocket
+      const tunnel = _tunnel as TcpSocket
       if (!socket.readable || !socket.writable) {
         tunnel.destroy()
         socket.destroy()
@@ -117,7 +117,14 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       res.writeHead(tunnelRes.statusCode!, tunnelRes.headers)
       pipeline(tunnelRes, res, noop)
     })
-    tunnelReq.once('error', console.error)
+    tunnelReq.once('error', _ => {
+      if (res.headersSent) {
+        res.destroy()
+        return
+      }
+      res.writeHead(502).end()
+      tunnelReq.destroy()
+    })
     pipeline(req, tunnelReq, noop)
   })
 
