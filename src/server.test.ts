@@ -32,10 +32,11 @@ describe('createServer', () => {
     })
   })
 
-  afterEach('stop servers', done => {
-    localSocket.destroy()
-    proxyServer.close(() => localServer.close(done))
-  })
+  afterEach('destroy local socket', () => localSocket.destroy())
+
+  afterEach('stop proxy server', done => proxyServer.close(done))
+
+  afterEach('stop local server', done => localServer.close(done))
 
   describe('on request', () => {
 
