@@ -49,7 +49,7 @@ export class TunnelAgent extends Agent {
       this.tunnels.push(socket)
       return
     }
-    defer(onConnection, null, socket) // hack?
+    defer(onConnection, null, socket)
   }
 
   createConnection(_: unknown, onConnection: OnConnection): void {
@@ -58,7 +58,7 @@ export class TunnelAgent extends Agent {
       this.connectionCallbacks.push(onConnection)
       return
     }
-    defer(onConnection, null, socket) // hack?
+    defer(onConnection, null, socket)
   }
 
 }

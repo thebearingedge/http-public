@@ -1,7 +1,7 @@
 {
   "name": "http-public",
   "version": "1.0.0",
-  "description": "Forward HTTP(S) traffic from the public internet to localhost.",
+  "description": "Forward HTTP traffic from the public internet to localhost.",
   "main": "index.js",
   "scripts": {
     "lint:staged": "lint-staged",
@@ -34,8 +34,6 @@
     "@types/chai": "^4.2.16",
     "@types/mocha": "^8.2.2",
     "@types/node": "^15.3.0",
-    "@types/promise-retry": "^1.1.3",
-    "@types/supertest": "^2.0.11",
     "@types/ws": "^7.4.4",
     "@typescript-eslint/eslint-plugin": "^4.20.0",
     "@typescript-eslint/parser": "^4.20.0",
@@ -50,10 +48,6 @@
     "is-ci": "^3.0.0",
     "lint-staged": "^11.0.0",
     "mocha": "^8.3.2",
-    "nock": "^13.0.11",
-    "npm-run-all": "^4.1.5",
-    "rimraf": "^3.0.2",
-    "supertest": "^6.1.3",
     "ts-node": "^9.1.1",
     "ts-node-dev": "^1.1.6",
     "typescript": "^4.2.3",

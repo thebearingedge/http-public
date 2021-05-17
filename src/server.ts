@@ -80,10 +80,11 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
     const { method, url, headers } = req
     const tunnelReqOptions = { method, url, headers, agent }
     const tunnelReq = request(tunnelReqOptions, tunnelRes => {
-      res.writeHead(tunnelRes.statusCode!, tunnelRes.headers)
-      pipeline(tunnelRes, res, noop)
+      res.writeHead(tunnelRes.statusCode!, tunnelRes.rawHeaders)
+      pipeline([tunnelRes, res], noop)
     })
-    tunnelReq.once('error', _ => {
+    tunnelReq.once('error', err => {
+      console.error('tunnelReq error', err)
       if (res.headersSent) {
         res.destroy()
         return
@@ -91,7 +92,7 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       res.writeHead(502).end()
       tunnelReq.destroy()
     })
-    pipeline(req, tunnelReq, noop)
+    pipeline([req, tunnelReq], noop)
   }
 
   function handleRemoteUpgrade(remoteHost: string, req: Req, socket: TcpSocket): void {
@@ -113,7 +114,7 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
         socket.destroy()
         return
       }
-      pipeline(socket, tunnel, socket, noop)
+      pipeline([socket, tunnel, socket], noop)
       const reqHead = getRequestHead(req)
       tunnel.write(reqHead)
     })

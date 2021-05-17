@@ -1,6 +1,9 @@
 {
   "root": true,
   "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "project": "./tsconfig.json"
+  },
   "plugins": [
     "@typescript-eslint"
   ],
@@ -39,15 +42,5 @@
         "asyncArrow": "always"
       }
     ]
-  },
-  "overrides": [
-    {
-      "files": [
-        "*.ts"
-      ],
-      "parserOptions": {
-        "project": "./tsconfig.json"
-      }
-    }
-  ]
+  }
 }

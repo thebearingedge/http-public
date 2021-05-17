@@ -88,7 +88,7 @@ describe('createServer', () => {
           req.end(done)
         })
 
-        it('queues the request', done => {
+        it('enqueues the request', done => {
           const remoteReqOptions = {
             port: proxyPort,
             headers: {
@@ -111,9 +111,8 @@ describe('createServer', () => {
             }
             const tunnelReq = request(tunnelReqOptions)
             tunnelReq.once('upgrade', (_, tunnelSocket) => {
-              pipeline(tunnelSocket, localSocket, tunnelSocket, noop)
+              pipeline([tunnelSocket, localSocket, tunnelSocket], noop)
             })
-            tunnelReq.once('error', done)
             tunnelReq.end()
           })
         })
@@ -145,7 +144,7 @@ describe('createServer', () => {
             }
             const tunnelReq = request(tunnelReqOptions)
             tunnelReq.once('upgrade', (_, tunnelSocket) => {
-              pipeline(tunnelSocket, localSocket, tunnelSocket, noop)
+              pipeline([tunnelSocket, localSocket, tunnelSocket], noop)
               done()
             })
             tunnelReq.once('error', done)
@@ -425,7 +424,7 @@ describe('createServer', () => {
             }
             const tunnelReq = request(tunnelReqOptions)
             tunnelReq.once('upgrade', (_, tunnelSocket) => {
-              pipeline(tunnelSocket, localSocket, tunnelSocket, noop)
+              pipeline([tunnelSocket, localSocket, tunnelSocket], noop)
               done()
             })
             tunnelReq.once('error', done)
@@ -485,7 +484,7 @@ describe('createServer', () => {
             }
             const tunnelReq = request(tunnelReqOptions)
             tunnelReq.once('upgrade', (_, tunnelSocket) => {
-              pipeline(tunnelSocket, localSocket, tunnelSocket, noop)
+              pipeline([tunnelSocket, localSocket, tunnelSocket], noop)
             })
             tunnelReq.once('error', done)
             tunnelReq.end()
