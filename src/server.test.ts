@@ -16,10 +16,7 @@ describe('createServer', () => {
   let localWebSocketServer: WebSocketServer
 
   beforeEach('start servers', done => {
-    const serverOptions = {
-      hostname: 'localhost'
-    }
-    proxyServer = createServer(serverOptions).listen(() => {
+    proxyServer = createServer().listen(() => {
       ({ port: proxyPort } = proxyServer.address() as AddressInfo)
       localServer = new HttpServer((_, res) => res.end())
       localWebSocketServer = new WebSocketServer({ server: localServer })
@@ -153,8 +150,6 @@ describe('createServer', () => {
           clientReq.once('error', done)
           clientReq.end()
         })
-
-        afterEach(() => localSocket.destroy())
 
         it('forwards the remote request to the local server', done => {
           const reqOptions = {
@@ -332,11 +327,7 @@ describe('createServer', () => {
               'x-tunnel-hostname': 'unknown.localhost'
             }
           }
-          const req = request(reqOptions)
-          req.once('upgrade', (_, tunnel) => {
-            tunnel.write('\0')
-          })
-          req.once('error', err => {
+          const req = request(reqOptions).once('error', err => {
             expect(err).to.be.an('error', 'socket hang up')
             done()
           })
@@ -362,7 +353,7 @@ describe('createServer', () => {
           req.end()
         })
 
-        it('persists the tunnel connection', done => {
+        it('upgrades the socket connection', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {
@@ -461,39 +452,40 @@ describe('createServer', () => {
               'x-tunnel-hostname': 'new.localhost'
             }
           }
-          const req = request(reqOptions)
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 201)
+            done()
+          })
           req.once('error', done)
-          req.end(done)
+          req.end()
         })
 
-        it('queues the upgrade', done => {
+        it('enqueues the upgrade', done => {
           const webSocket = new WebSocket(`ws://localhost:${proxyPort}`, {
             headers: {
               host: 'new.localhost'
             }
           })
           webSocket.once('message', data => {
-            expect(String(data)).to.equal('success!')
+            expect(data.toString()).to.equal('success!')
             done()
           })
           webSocket.once('error', done)
-          setTimeout(() => {
-            const tunnelReqOptions = {
-              port: proxyPort,
-              headers: {
-                connection: 'upgrade',
-                upgrade: '@http-public/tunnel',
-                'x-tunnel-hostname': 'new.localhost'
-              }
+          const tunnelReqOptions = {
+            port: proxyPort,
+            headers: {
+              connection: 'upgrade',
+              upgrade: '@http-public/tunnel',
+              'x-tunnel-hostname': 'new.localhost'
             }
-            const tunnelReq = request(tunnelReqOptions)
-            tunnelReq.once('upgrade', (_, tunnel) => {
-              tunnel.write('\0')
-              pipeline([tunnel, localSocket, tunnel], noop)
-            })
-            tunnelReq.once('error', done)
-            tunnelReq.end()
+          }
+          const tunnelReq = request(tunnelReqOptions)
+          tunnelReq.once('upgrade', (_, tunnel) => {
+            tunnel.write('\0')
+            pipeline([tunnel, localSocket, tunnel], noop)
           })
+          tunnelReq.once('error', done)
+          tunnelReq.end()
         })
 
       })

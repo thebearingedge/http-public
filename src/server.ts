@@ -10,14 +10,14 @@ import { TunnelAgent } from './tunnel-agent'
 import { noop, isUndefined, getHostname, getRequestHead } from './util'
 
 type ProxyServerOptions = {
-  hostname: string
+  hostname?: string
 }
 
-export const createServer = (options: ProxyServerOptions): HttpServer => {
+export const createServer = (options: ProxyServerOptions = {}): HttpServer => {
 
   const server = new HttpServer()
-  const { hostname: serverHostname } = options
   const tunnelAgents = new Map<string, TunnelAgent>()
+  const { hostname: proxyHostname = 'localhost' } = options
 
   server.on('request', (req: Req, res: Res) => {
     const hostname = getHostname(req.headers.host)
@@ -25,11 +25,11 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       res.writeHead(400).end()
       return
     }
-    if (hostname === serverHostname) {
+    if (hostname === proxyHostname) {
       handleClientRequest(req, res)
       return
     }
-    handleRemoteRequest(hostname, req, res)
+    handleProxyRequest(hostname, req, res)
   })
 
   server.on('upgrade', (req: Req, socket: TcpSocket) => {
@@ -38,19 +38,19 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       socket.destroy()
       return
     }
-    if (hostname === serverHostname) {
+    if (hostname === proxyHostname) {
       handleClientUpgrade(req, socket)
       return
     }
-    handleRemoteUpgrade(hostname, req, socket)
+    handleProxyUpgrade(hostname, req, socket)
   })
 
   const closeServer = server.close
 
   server.close = (handleClose: () => void) => {
-    tunnelAgents.forEach((agent, remoteHost) => {
-      agent.emit('close')
-      tunnelAgents.delete(remoteHost)
+    tunnelAgents.forEach((agent, hostname) => {
+      tunnelAgents.delete(hostname)
+      agent.destroy()
     })
     return closeServer.call(server, handleClose)
   }
@@ -58,20 +58,20 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
   return server
 
   function handleClientRequest(req: Req, res: Res): void {
-    const tunnelHostname = getHostname(req.headers['x-tunnel-hostname'])
-    if (isUndefined(tunnelHostname)) {
+    const hostname = getHostname(req.headers['x-tunnel-hostname'])
+    if (isUndefined(hostname)) {
       res.writeHead(400).end()
       return
     }
-    if (tunnelAgents.has(tunnelHostname)) {
+    if (tunnelAgents.has(hostname)) {
       res.writeHead(409).end()
       return
     }
-    tunnelAgents.set(tunnelHostname, new TunnelAgent())
+    tunnelAgents.set(hostname, new TunnelAgent())
     res.writeHead(201).end()
   }
 
-  function handleRemoteRequest(hostname: string, req: Req, res: Res): void {
+  function handleProxyRequest(hostname: string, req: Req, res: Res): void {
     const agent = tunnelAgents.get(hostname)
     if (isUndefined(agent)) {
       res.writeHead(404).end()
@@ -94,8 +94,32 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
     pipeline([req, tunnelReq], noop)
   }
 
-  function handleRemoteUpgrade(remoteHost: string, req: Req, socket: TcpSocket): void {
-    const agent = tunnelAgents.get(remoteHost)
+  function handleClientUpgrade(req: Req, socket: TcpSocket): void {
+    if (req.headers.upgrade !== '@http-public/tunnel') {
+      socket.destroy()
+      return
+    }
+    const hostname = getHostname(req.headers['x-tunnel-hostname'])
+    if (isUndefined(hostname)) {
+      socket.destroy()
+      return
+    }
+    const agent = tunnelAgents.get(hostname)
+    if (isUndefined(agent)) {
+      socket.destroy()
+      return
+    }
+    socket.write(
+      'HTTP/1.1 101 Switching Protocols\r\n' +
+      'Connection: upgrade\r\n' +
+      'upgrade: @http-public/tunnel\r\n' +
+      '\r\n'
+    )
+    agent.registerTunnel(socket)
+  }
+
+  function handleProxyUpgrade(hostname: string, req: Req, socket: TcpSocket): void {
+    const agent = tunnelAgents.get(hostname)
     if (isUndefined(agent)) {
       socket.end(
         'HTTP/1.1 404 Not Found\r\n' +
@@ -119,27 +143,4 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
     })
   }
 
-  function handleClientUpgrade(req: Req, socket: TcpSocket): void {
-    if (req.headers.upgrade !== '@http-public/tunnel') {
-      socket.destroy()
-      return
-    }
-    const tunnelHost = getHostname(req.headers['x-tunnel-hostname'])
-    if (isUndefined(tunnelHost)) {
-      socket.destroy()
-      return
-    }
-    const agent = tunnelAgents.get(tunnelHost)
-    if (isUndefined(agent)) {
-      socket.destroy()
-      return
-    }
-    socket.write(
-      'HTTP/1.1 101 Switching Protocols\r\n' +
-      'Connection: upgrade\r\n' +
-      'upgrade: @http-public/tunnel\r\n' +
-      '\r\n'
-    )
-    agent.emit('tunnel', socket)
-  }
 }

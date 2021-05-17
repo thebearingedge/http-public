@@ -25,6 +25,7 @@
         "classes": "always"
       }
     ],
+    "@typescript-eslint/no-base-to-string": "off",
     "@typescript-eslint/prefer-function-type": "off",
     "@typescript-eslint/promise-function-async": "off",
     "@typescript-eslint/method-signature-style": [

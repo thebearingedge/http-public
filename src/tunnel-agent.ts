@@ -9,7 +9,6 @@ export type OnConnection = {
 
 export interface TunnelAgent extends EventEmitter, Agent {
   emit(event: 'close'): boolean
-  emit(event: 'tunnel', socket: TcpSocket): boolean
 }
 
 export class TunnelAgent extends Agent {
@@ -23,8 +22,19 @@ export class TunnelAgent extends Agent {
     this.tunnels = []
     this.tunnelQueue = []
     this.connectionQueue = []
-    this.on('close', this.handleClose)
-    this.on('tunnel', this.handleTunnel)
+  }
+
+  private readonly handleClientAck = (socket: TcpSocket) => (data: Buffer): void => {
+    if (data.toString() !== '\0') {
+      socket.destroy()
+      return
+    }
+    const onConnection = this.connectionQueue.shift()
+    if (isUndefined(onConnection)) {
+      this.tunnelQueue.push(socket)
+      return
+    }
+    setImmediate(onConnection, null, socket)
   }
 
   private readonly handleSocketClose = (socket: TcpSocket) => (): void => {
@@ -37,44 +47,31 @@ export class TunnelAgent extends Agent {
     socket.emit('close')
   }
 
-  private readonly handleClose = (): void => {
-    this.tunnels.forEach(socket => socket.destroy())
-    this.connectionQueue.forEach(onConnection => {
-      onConnection(new Error('agent closed'))
-    })
-    this.destroy()
-    this.tunnels = []
-    this.tunnelQueue = []
-    this.connectionQueue = []
-  }
-
-  private readonly handleTunnel = (socket: TcpSocket): void => {
-    socket.once('error', this.handleSocketError(socket))
-    socket.once('close', this.handleSocketClose(socket))
-    this.tunnels.push(socket)
-    const handleClientAck = (data: Buffer): void => {
-      if (data.toString('utf8') !== '\0') {
-        socket.destroy()
-        return
-      }
-      socket.off('data', handleClientAck)
-      const onConnection = this.connectionQueue.shift()
-      if (isUndefined(onConnection)) {
-        this.tunnelQueue.push(socket)
-        return
-      }
-      setImmediate(onConnection, null, socket)
-    }
-    socket.on('data', handleClientAck)
-  }
-
-  createConnection(_: unknown, onConnection: OnConnection): void {
+  createConnection(_: any, onConnection: OnConnection): void {
     const socket = this.tunnelQueue.shift()
     if (isUndefined(socket)) {
       this.connectionQueue.push(onConnection)
       return
     }
     setImmediate(onConnection, null, socket)
+  }
+
+  registerTunnel(socket: TcpSocket): void {
+    socket.once('data', this.handleClientAck(socket))
+    socket.once('error', this.handleSocketError(socket))
+    socket.once('close', this.handleSocketClose(socket))
+    this.tunnels.push(socket)
+  }
+
+  destroy(): void {
+    this.tunnels.forEach(socket => socket.destroy())
+    this.connectionQueue.forEach(onConnection => {
+      onConnection(new Error('agent closed'))
+    })
+    this.tunnels = []
+    this.tunnelQueue = []
+    this.connectionQueue = []
+    super.destroy()
   }
 
 }

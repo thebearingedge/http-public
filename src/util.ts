@@ -23,4 +23,4 @@ export const isString = (value: unknown): value is string => {
   return typeof value === 'string'
 }
 
-export const noop = (...args: any[]): void => {}
+export const noop = (..._args: any[]): void => {}
