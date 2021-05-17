@@ -114,6 +114,7 @@ describe('createServer', () => {
               tunnel.write('\0')
               pipeline([tunnel, localSocket, tunnel], noop)
             })
+            tunnelReq.once('error', done)
             tunnelReq.end()
           })
         })
@@ -122,8 +123,6 @@ describe('createServer', () => {
 
       context('when a tunnel connection is available for the hostname', () => {
 
-        let localSocket: TcpSocket
-
         beforeEach('create a tunnel agent and tunnel', done => {
           const clientReqOptions = {
             port: proxyPort,
@@ -131,8 +130,6 @@ describe('createServer', () => {
               'x-tunnel-hostname': 'new.localhost'
             }
           }
-          localSocket = connect({ port: localPort })
-          localSocket.once('error', done)
           const clientReq = request(clientReqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
             const tunnelReqOptions = {

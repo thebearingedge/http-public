@@ -140,14 +140,6 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       'upgrade: @http-public/tunnel\r\n' +
       '\r\n'
     )
-    const handleClientAck = (data: Buffer): void => {
-      if (String(data) !== '\0') {
-        socket.destroy()
-        return
-      }
-      socket.off('data', handleClientAck)
-      agent.emit('tunnel', socket)
-    }
-    socket.on('data', handleClientAck)
+    agent.emit('tunnel', socket)
   }
 }
