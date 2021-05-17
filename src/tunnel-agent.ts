@@ -59,6 +59,7 @@ export class TunnelAgent extends Agent {
   registerTunnel(socket: TcpSocket): void {
     socket.once('data', this.handleClientAck(socket))
     socket.once('error', this.handleSocketError(socket))
+    socket.once('end', this.handleSocketClose(socket))
     socket.once('close', this.handleSocketClose(socket))
     this.tunnels.push(socket)
   }

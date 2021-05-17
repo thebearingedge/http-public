@@ -288,10 +288,10 @@ describe('createServer', () => {
               upgrade: 'unsupported'
             }
           }
-          const req = request(reqOptions).once('error', err => {
-            expect(err).to.be.an('error', 'socket hang up')
-            done()
+          const req = request(reqOptions).once('socket', socket => {
+            socket.once('close', () => done())
           })
+          req.once('error', noop)
           req.end()
         })
 
@@ -307,10 +307,10 @@ describe('createServer', () => {
               upgrade: '@http-public/tunnel'
             }
           }
-          const req = request(reqOptions).once('error', err => {
-            expect(err).to.be.an('error', 'socket hang up')
-            done()
+          const req = request(reqOptions).once('socket', socket => {
+            socket.once('close', () => done())
           })
+          req.once('error', noop)
           req.end()
         })
 
@@ -327,10 +327,10 @@ describe('createServer', () => {
               'x-tunnel-hostname': 'unknown.localhost'
             }
           }
-          const req = request(reqOptions).once('error', err => {
-            expect(err).to.be.an('error', 'socket hang up')
-            done()
+          const req = request(reqOptions).once('socket', socket => {
+            socket.once('close', () => done())
           })
+          req.once('error', noop)
           req.end()
         })
 
