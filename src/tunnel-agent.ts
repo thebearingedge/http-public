@@ -1,7 +1,7 @@
 import EventEmitter from 'events'
 import { Socket as TcpSocket } from 'net'
 import { Agent, AgentOptions } from 'http'
-import { defer, isUndefined } from './util'
+import { isUndefined } from './util'
 
 export type OnConnection = {
   (err: Error | null, socket?: TcpSocket): void
@@ -49,7 +49,7 @@ export class TunnelAgent extends Agent {
       this.tunnels.push(socket)
       return
     }
-    defer(onConnection, null, socket)
+    setImmediate(onConnection, null, socket)
   }
 
   createConnection(_: unknown, onConnection: OnConnection): void {
@@ -58,7 +58,7 @@ export class TunnelAgent extends Agent {
       this.connectionCallbacks.push(onConnection)
       return
     }
-    defer(onConnection, null, socket)
+    setImmediate(onConnection, null, socket)
   }
 
 }

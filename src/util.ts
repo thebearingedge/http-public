@@ -24,7 +24,3 @@ export const isString = (value: unknown): value is string => {
 }
 
 export const noop = (...args: any[]): void => {}
-
-export const defer = (callback: (...args: any[]) => any, ...args: any): void => {
-  setTimeout(callback, 0, ...args)
-}

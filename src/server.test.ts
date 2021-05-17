@@ -88,7 +88,7 @@ describe('createServer', () => {
           req.end(done)
         })
 
-        it.only('enqueues the request', done => {
+        it('enqueues the request', done => {
           const remoteReqOptions = {
             port: proxyPort,
             headers: {
@@ -110,8 +110,9 @@ describe('createServer', () => {
               }
             }
             const tunnelReq = request(tunnelReqOptions)
-            tunnelReq.once('upgrade', (_, tunnelSocket) => {
-              pipeline([tunnelSocket, localSocket, tunnelSocket], noop)
+            tunnelReq.once('upgrade', (_, tunnel) => {
+              tunnel.write('\0')
+              pipeline([tunnel, localSocket, tunnel], noop)
             })
             tunnelReq.end()
           })
@@ -143,8 +144,9 @@ describe('createServer', () => {
               }
             }
             const tunnelReq = request(tunnelReqOptions)
-            tunnelReq.once('upgrade', (_, tunnelSocket) => {
-              pipeline([tunnelSocket, localSocket, tunnelSocket], noop)
+            tunnelReq.once('upgrade', (_, tunnel) => {
+              tunnel.write('\0')
+              pipeline([tunnel, localSocket, tunnel], noop)
               done()
             })
             tunnelReq.once('error', done)
@@ -332,7 +334,11 @@ describe('createServer', () => {
               'x-tunnel-hostname': 'unknown.localhost'
             }
           }
-          const req = request(reqOptions).once('error', err => {
+          const req = request(reqOptions)
+          req.once('upgrade', (_, tunnel) => {
+            tunnel.write('\0')
+          })
+          req.once('error', err => {
             expect(err).to.be.an('error', 'socket hang up')
             done()
           })
@@ -358,7 +364,7 @@ describe('createServer', () => {
           req.end()
         })
 
-        it('persists the socket connection', done => {
+        it('persists the tunnel connection', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {
@@ -367,9 +373,8 @@ describe('createServer', () => {
               'x-tunnel-hostname': 'new.localhost'
             }
           }
-          const req = request(reqOptions).once('upgrade', (_, socket) => {
-            socket.destroy()
-            done()
+          const req = request(reqOptions).once('upgrade', (_, tunnel) => {
+            tunnel.end('\0', done)
           })
           req.once('error', done)
           req.end()
@@ -423,8 +428,9 @@ describe('createServer', () => {
               }
             }
             const tunnelReq = request(tunnelReqOptions)
-            tunnelReq.once('upgrade', (_, tunnelSocket) => {
-              pipeline([tunnelSocket, localSocket, tunnelSocket], noop)
+            tunnelReq.once('upgrade', (_, tunnel) => {
+              tunnel.write('\0')
+              pipeline([tunnel, localSocket, tunnel], noop)
               done()
             })
             tunnelReq.once('error', done)
@@ -483,8 +489,9 @@ describe('createServer', () => {
               }
             }
             const tunnelReq = request(tunnelReqOptions)
-            tunnelReq.once('upgrade', (_, tunnelSocket) => {
-              pipeline([tunnelSocket, localSocket, tunnelSocket], noop)
+            tunnelReq.once('upgrade', (_, tunnel) => {
+              tunnel.write('\0')
+              pipeline([tunnel, localSocket, tunnel], noop)
             })
             tunnelReq.once('error', done)
             tunnelReq.end()
