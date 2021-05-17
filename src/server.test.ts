@@ -76,7 +76,7 @@ describe('createServer', () => {
 
       context('when no tunnels are available for the hostname', () => {
 
-        beforeEach(done => {
+        beforeEach('create a tunnel agent', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {
@@ -88,7 +88,7 @@ describe('createServer', () => {
           req.end(done)
         })
 
-        it('enqueues the request', done => {
+        it.only('enqueues the request', done => {
           const remoteReqOptions = {
             port: proxyPort,
             headers: {
@@ -123,7 +123,7 @@ describe('createServer', () => {
 
         let localSocket: TcpSocket
 
-        beforeEach(done => {
+        beforeEach('create a tunnel agent and tunnel', done => {
           const clientReqOptions = {
             port: proxyPort,
             headers: {
@@ -232,7 +232,7 @@ describe('createServer', () => {
 
       context('when the tunnel hostname is occupied', () => {
 
-        beforeEach(done => {
+        beforeEach('create a tunnel agent', done => {
           const reqOptions = {
             port: proxyPort,
             headers: { 'x-tunnel-hostname': 'new.localhost' }
@@ -341,9 +341,9 @@ describe('createServer', () => {
 
       })
 
-      context('when a tunnel has been created for the hostname', () => {
+      context('when a tunnel agent has been created for the hostname', () => {
 
-        beforeEach(done => {
+        beforeEach('create a tunnel agent', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {
@@ -405,7 +405,7 @@ describe('createServer', () => {
 
       context('when a tunnel connection is available for the hostname', () => {
 
-        beforeEach(done => {
+        beforeEach('create a tunnel agent and tunnel', done => {
           const clientReqOptions = {
             port: proxyPort,
             headers: {
@@ -450,7 +450,7 @@ describe('createServer', () => {
 
       context('when no tunnels are available for the hostname', () => {
 
-        beforeEach(done => {
+        beforeEach('create a tunnel agent', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {

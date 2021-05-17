@@ -83,8 +83,7 @@ export const createServer = (options: ProxyServerOptions): HttpServer => {
       res.writeHead(tunnelRes.statusCode!, tunnelRes.rawHeaders)
       pipeline([tunnelRes, res], noop)
     })
-    tunnelReq.once('error', err => {
-      console.error('tunnelReq error', err)
+    tunnelReq.once('error', () => {
       if (res.headersSent) {
         res.destroy()
         return
