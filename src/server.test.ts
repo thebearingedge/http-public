@@ -1,10 +1,10 @@
 import { pipeline } from 'stream'
+import { connect, AddressInfo, Socket } from 'net'
 import { request, Server as HttpServer } from 'http'
-import { connect, AddressInfo, Socket as TcpSocket } from 'net'
 import WebSocket, { Server as WebSocketServer } from 'ws'
 import { expect } from 'chai'
-import { noop } from './util'
 import { createServer } from './server'
+import { noop, CLIENT_ACK } from './util'
 
 describe('server', () => {
 
@@ -12,7 +12,7 @@ describe('server', () => {
   let proxyServer: HttpServer
   let localPort: number
   let localServer: HttpServer
-  let localSocket: TcpSocket
+  let localSocket: Socket
   let localWebSocketServer: WebSocketServer
 
   beforeEach('start servers', done => {
@@ -63,7 +63,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 404)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -71,7 +72,6 @@ describe('server', () => {
       })
 
       context('when no tunnels are available for the hostname', () => {
-
         beforeEach('create a tunnel agent', done => {
           const reqOptions = {
             port: proxyPort,
@@ -81,7 +81,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -95,9 +96,10 @@ describe('server', () => {
           }
           const remoteReq = request(remoteReqOptions, res => {
             expect(res).to.have.property('statusCode', 200)
-            done()
+            res.resume()
+            res.once('end', done)
           })
-          remoteReq.once('socket', () => {
+          remoteReq.end(() => {
             const tunnelReqOptions = {
               port: proxyPort,
               headers: {
@@ -108,8 +110,8 @@ describe('server', () => {
             }
             const tunnelReq = request(tunnelReqOptions)
             tunnelReq.once('upgrade', (_, tunnel) => {
-              tunnel.write('\x00')
-              pipeline([tunnel, localSocket, tunnel], noop)
+              const stream = pipeline([tunnel, localSocket, tunnel], noop)
+              stream.write(CLIENT_ACK)
             })
             tunnelReq.end()
           })
@@ -129,21 +131,23 @@ describe('server', () => {
           }
           const clientReq = request(clientReqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
-            const tunnelReqOptions = {
-              port: proxyPort,
-              headers: {
-                connection: 'upgrade',
-                upgrade: '@http-public/tunnel',
-                'x-tunnel-host': 'new.localhost'
+            res.resume()
+            res.once('end', () => {
+              const tunnelReqOptions = {
+                port: proxyPort,
+                headers: {
+                  connection: 'upgrade',
+                  upgrade: '@http-public/tunnel',
+                  'x-tunnel-host': 'new.localhost'
+                }
               }
-            }
-            const tunnelReq = request(tunnelReqOptions)
-            tunnelReq.once('upgrade', (_, tunnel) => {
-              tunnel.write('\x00')
-              pipeline([tunnel, localSocket, tunnel], noop)
-              done()
+              const tunnelReq = request(tunnelReqOptions)
+              tunnelReq.once('upgrade', (_, tunnel) => {
+                const stream = pipeline([tunnel, localSocket, tunnel], noop)
+                stream.write(CLIENT_ACK, done)
+              })
+              tunnelReq.end()
             })
-            tunnelReq.end()
           })
           clientReq.end()
         })
@@ -157,7 +161,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 200)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -192,7 +197,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 400)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -210,7 +216,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 400)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -228,7 +235,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -244,7 +252,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -256,7 +265,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 409)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -355,7 +365,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -370,7 +381,7 @@ describe('server', () => {
             }
           }
           const req = request(reqOptions).once('upgrade', (_, tunnel) => {
-            tunnel.end('\x00', done)
+            tunnel.end(CLIENT_ACK, done)
           })
           req.end()
         })
@@ -394,8 +405,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 404)
-            res.destroy()
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -413,7 +424,8 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
-            done()
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -439,8 +451,8 @@ describe('server', () => {
           }
           const tunnelReq = request(tunnelReqOptions)
           tunnelReq.once('upgrade', (_, tunnel) => {
-            tunnel.write('\x00')
-            pipeline([tunnel, localSocket, tunnel], noop)
+            const stream = pipeline([tunnel, localSocket, tunnel], noop)
+            stream.write(CLIENT_ACK)
           })
           tunnelReq.end()
         })
@@ -458,21 +470,23 @@ describe('server', () => {
           }
           const clientReq = request(clientReqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
-            const tunnelReqOptions = {
-              port: proxyPort,
-              headers: {
-                connection: 'upgrade',
-                upgrade: '@http-public/tunnel',
-                'x-tunnel-host': 'new.localhost'
+            res.resume()
+            res.once('end', () => {
+              const tunnelReqOptions = {
+                port: proxyPort,
+                headers: {
+                  connection: 'upgrade',
+                  upgrade: '@http-public/tunnel',
+                  'x-tunnel-host': 'new.localhost'
+                }
               }
-            }
-            const tunnelReq = request(tunnelReqOptions)
-            tunnelReq.once('upgrade', (_, tunnel) => {
-              tunnel.write('\x00')
-              pipeline([tunnel, localSocket, tunnel], noop)
-              done()
+              const tunnelReq = request(tunnelReqOptions)
+              tunnelReq.once('upgrade', (_, tunnel) => {
+                const stream = pipeline([tunnel, localSocket, tunnel], noop)
+                stream.write(CLIENT_ACK, done)
+              })
+              tunnelReq.end()
             })
-            tunnelReq.end()
           })
           clientReq.end()
         })

@@ -1,6 +1,6 @@
 import { Socket } from 'net'
 import { Agent, AgentOptions } from 'http'
-import { isUndefined } from './util'
+import { isUndefined, CLIENT_ACK } from './util'
 
 export type OnConnection = {
   (err: Error | null, socket?: Socket): void
@@ -20,8 +20,10 @@ export class TunnelAgent extends Agent {
   }
 
   onClientAck(socket: Socket) {
+    // don't use the socket right away
+    // wait for the client to be ready
     return (data: Buffer) => {
-      if (data.toString() !== '\x00') {
+      if (data.toString() !== CLIENT_ACK) {
         socket.destroy()
         return
       }
