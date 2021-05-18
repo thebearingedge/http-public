@@ -164,6 +164,22 @@ describe('server', () => {
 
       })
 
+      context('when a tunnel connection breaks', () => {
+
+        context('and headers have not been transferred', () => {
+
+          it('responds with a 502 error')
+
+        })
+
+        context('and headers have been transferred', () => {
+
+          it('terminates the request')
+
+        })
+
+      })
+
     })
 
     describe('for client requests', () => {
@@ -268,7 +284,7 @@ describe('server', () => {
 
     })
 
-    describe('for local clients', () => {
+    describe('for client upgrades', () => {
 
       context('when the uprade header is not @http-public/tunnel', () => {
 
@@ -363,7 +379,7 @@ describe('server', () => {
 
     })
 
-    describe('for remote clients', () => {
+    describe('for remote upgrades', () => {
 
       context('when no agent is serving the hostname', () => {
 
@@ -472,6 +488,12 @@ describe('server', () => {
             done()
           })
         })
+
+      })
+
+      context('when the remote connection breaks', () => {
+
+        it('destroys the tunnel')
 
       })
 
