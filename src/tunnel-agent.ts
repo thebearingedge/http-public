@@ -1,15 +1,15 @@
-import { Socket as TcpSocket } from 'net'
+import { Socket } from 'net'
 import { Agent, AgentOptions } from 'http'
 import { isUndefined } from './util'
 
 export type OnConnection = {
-  (err: Error | null, socket?: TcpSocket): void
+  (err: Error | null, socket?: Socket): void
 }
 
 export class TunnelAgent extends Agent {
 
-  private tunnels: TcpSocket[]
-  private tunnelQueue: TcpSocket[]
+  private tunnels: Socket[]
+  private tunnelQueue: Socket[]
   private connectionQueue: OnConnection[]
 
   constructor(options: AgentOptions = {}) {
@@ -19,27 +19,33 @@ export class TunnelAgent extends Agent {
     this.connectionQueue = []
   }
 
-  private readonly onClientAck = (socket: TcpSocket) => (data: Buffer): void => {
-    if (data.toString() !== '\x00') {
+  onClientAck(socket: Socket) {
+    return (data: Buffer) => {
+      if (data.toString() !== '\x00') {
+        socket.destroy()
+        return
+      }
+      const onConnection = this.connectionQueue.shift()
+      if (isUndefined(onConnection)) {
+        this.tunnelQueue.push(socket)
+        return
+      }
+      setImmediate(onConnection, null, socket)
+    }
+  }
+
+  onSocketClose(socket: Socket) {
+    return () => {
       socket.destroy()
-      return
+      this.tunnels = this.tunnels.filter(tunnel => tunnel !== socket)
+      this.tunnelQueue = this.tunnelQueue.filter(tunnel => tunnel !== socket)
     }
-    const onConnection = this.connectionQueue.shift()
-    if (isUndefined(onConnection)) {
-      this.tunnelQueue.push(socket)
-      return
-    }
-    setImmediate(onConnection, null, socket)
   }
 
-  private readonly onSocketClose = (socket: TcpSocket) => (): void => {
-    socket.destroy()
-    this.tunnels = this.tunnels.filter(tunnel => tunnel !== socket)
-    this.tunnelQueue = this.tunnelQueue.filter(tunnel => tunnel !== socket)
-  }
-
-  private readonly onSocketError = (socket: TcpSocket) => (): void => {
-    socket.emit('close')
+  onSocketError(socket: Socket) {
+    return () => {
+      socket.emit('close')
+    }
   }
 
   createConnection(_: any, onConnection: OnConnection): void {
@@ -51,7 +57,7 @@ export class TunnelAgent extends Agent {
     setImmediate(onConnection, null, socket)
   }
 
-  registerTunnel(socket: TcpSocket): void {
+  registerTunnel(socket: Socket): void {
     socket.once('data', this.onClientAck(socket))
     socket.once('error', this.onSocketError(socket))
     socket.once('end', this.onSocketClose(socket))
