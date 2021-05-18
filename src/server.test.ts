@@ -36,7 +36,7 @@ describe('server', () => {
 
   describe('on request', () => {
 
-    describe('all requests', () => {
+    describe('for all requests', () => {
 
       it('requires a host header', done => {
         const socket = connect({ port: proxyPort })
@@ -50,7 +50,7 @@ describe('server', () => {
 
     })
 
-    describe('remote requests', () => {
+    describe('for remote requests', () => {
 
       context('when no agent is serving the hostname', () => {
 
@@ -166,7 +166,7 @@ describe('server', () => {
 
     })
 
-    describe('client requests', () => {
+    describe('for client requests', () => {
 
       context('when the x-tunnel-host header is not set', () => {
 
