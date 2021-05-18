@@ -19,7 +19,7 @@ export class TunnelAgent extends Agent {
     this.connectionQueue = []
   }
 
-  private readonly handleClientAck = (socket: TcpSocket) => (data: Buffer): void => {
+  private readonly onClientAck = (socket: TcpSocket) => (data: Buffer): void => {
     if (data.toString() !== '\x00') {
       socket.destroy()
       return
@@ -32,13 +32,13 @@ export class TunnelAgent extends Agent {
     setImmediate(onConnection, null, socket)
   }
 
-  private readonly handleSocketClose = (socket: TcpSocket) => (): void => {
+  private readonly onSocketClose = (socket: TcpSocket) => (): void => {
     socket.destroy()
     this.tunnels = this.tunnels.filter(tunnel => tunnel !== socket)
     this.tunnelQueue = this.tunnelQueue.filter(tunnel => tunnel !== socket)
   }
 
-  private readonly handleSocketError = (socket: TcpSocket) => (): void => {
+  private readonly onSocketError = (socket: TcpSocket) => (): void => {
     socket.emit('close')
   }
 
@@ -52,10 +52,10 @@ export class TunnelAgent extends Agent {
   }
 
   registerTunnel(socket: TcpSocket): void {
-    socket.once('data', this.handleClientAck(socket))
-    socket.once('error', this.handleSocketError(socket))
-    socket.once('end', this.handleSocketClose(socket))
-    socket.once('close', this.handleSocketClose(socket))
+    socket.once('data', this.onClientAck(socket))
+    socket.once('error', this.onSocketError(socket))
+    socket.once('end', this.onSocketClose(socket))
+    socket.once('close', this.onSocketClose(socket))
     this.tunnels.push(socket)
   }
 
