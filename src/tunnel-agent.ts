@@ -6,13 +6,17 @@ export type OnConnection = {
   (err: Error | null, socket?: Socket): void
 }
 
+export type AgentOverrides = 'keepAlive' | 'maxFreeSockets'
+
+export type TunnelAgentOptions = Omit<AgentOptions, AgentOverrides>
+
 export class TunnelAgent extends Agent {
 
   private tunnels: Socket[]
   private tunnelQueue: Socket[]
   private connectionQueue: OnConnection[]
 
-  constructor(options: AgentOptions = {}) {
+  constructor(options: TunnelAgentOptions = {}) {
     super({ ...options, keepAlive: true, maxFreeSockets: 1 })
     this.tunnels = []
     this.tunnelQueue = []
@@ -50,7 +54,7 @@ export class TunnelAgent extends Agent {
     }
   }
 
-  createConnection(_: any, onConnection: OnConnection): void {
+  createConnection(_: null, onConnection: OnConnection): void {
     const socket = this.tunnelQueue.shift()
     if (isUndefined(socket)) {
       this.connectionQueue.push(onConnection)
