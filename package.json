@@ -19,7 +19,8 @@
     ],
     "require": [
       "ts-node/register"
-    ]
+    ],
+    "timeout": 500
   },
   "lint-staged": {
     "*.ts": [

@@ -1,14 +1,9 @@
-import EventEmitter from 'events'
 import { Socket as TcpSocket } from 'net'
 import { Agent, AgentOptions } from 'http'
 import { isUndefined } from './util'
 
 export type OnConnection = {
   (err: Error | null, socket?: TcpSocket): void
-}
-
-export interface TunnelAgent extends EventEmitter, Agent {
-  emit(event: 'close'): boolean
 }
 
 export class TunnelAgent extends Agent {
@@ -25,7 +20,7 @@ export class TunnelAgent extends Agent {
   }
 
   private readonly handleClientAck = (socket: TcpSocket) => (data: Buffer): void => {
-    if (data.toString() !== '\0') {
+    if (data.toString() !== '\x00') {
       socket.destroy()
       return
     }
