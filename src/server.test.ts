@@ -36,7 +36,7 @@ describe('server', () => {
       localWebSocketServer.on('connection', ws => ws.send('success!'))
       localServer.listen(0, 'localhost', () => {
         ({ port: localPort } = localServer.address() as AddressInfo)
-        localSocket = connect({ port: localPort })
+        localSocket = connect(localPort)
         localSocket.once('connect', done)
       })
     })
@@ -52,13 +52,101 @@ describe('server', () => {
     describe('for all requests', () => {
 
       it('requires a host header', done => {
-        const socket = connect({ port: proxyPort })
+        const socket = connect(proxyPort)
         socket.once('error', done)
         socket.once('data', data => {
           expect(data.toString()).to.match(/^HTTP\/1\.1 400 Bad Request/)
           done()
         })
         socket.end('GET / HTTP/1.1\r\n\r\n')
+      })
+
+    })
+
+    describe('for client requests', () => {
+
+      context('when the x-tunnel-host header is not set', () => {
+
+        it('responds with a 400 error', done => {
+          const reqOptions = {
+            port: proxyPort
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 400)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
+      })
+
+      context('when the x-tunnel-host header is not valid', () => {
+
+        it('responds with a 400 error', done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: {
+              'x-tunnel-host': '@'
+            }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 400)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
+      })
+
+      context('when the tunnel hostname is available', () => {
+
+        it('responds with a 201 success', done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: {
+              'x-tunnel-host': 'new.localhost'
+            }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 201)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
+      })
+
+      context('when the tunnel hostname is occupied', () => {
+
+        beforeEach('create a tunnel agent', done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: { 'x-tunnel-host': 'new.localhost' }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 201)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
+        it('responds with a 409 error', done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: { 'x-tunnel-host': 'new.localhost' }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 409)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
       })
 
     })
@@ -220,94 +308,6 @@ describe('server', () => {
 
     })
 
-    describe('for client requests', () => {
-
-      context('when the x-tunnel-host header is not set', () => {
-
-        it('responds with a 400 error', done => {
-          const reqOptions = {
-            port: proxyPort
-          }
-          const req = request(reqOptions, res => {
-            expect(res).to.have.property('statusCode', 400)
-            res.resume()
-            res.once('end', done)
-          })
-          req.end()
-        })
-
-      })
-
-      context('when the x-tunnel-host header is not valid', () => {
-
-        it('responds with a 400 error', done => {
-          const reqOptions = {
-            port: proxyPort,
-            headers: {
-              'x-tunnel-host': '@'
-            }
-          }
-          const req = request(reqOptions, res => {
-            expect(res).to.have.property('statusCode', 400)
-            res.resume()
-            res.once('end', done)
-          })
-          req.end()
-        })
-
-      })
-
-      context('when the tunnel hostname is available', () => {
-
-        it('responds with a 201 success', done => {
-          const reqOptions = {
-            port: proxyPort,
-            headers: {
-              'x-tunnel-host': 'new.localhost'
-            }
-          }
-          const req = request(reqOptions, res => {
-            expect(res).to.have.property('statusCode', 201)
-            res.resume()
-            res.once('end', done)
-          })
-          req.end()
-        })
-
-      })
-
-      context('when the tunnel hostname is occupied', () => {
-
-        beforeEach('create a tunnel agent', done => {
-          const reqOptions = {
-            port: proxyPort,
-            headers: { 'x-tunnel-host': 'new.localhost' }
-          }
-          const req = request(reqOptions, res => {
-            expect(res).to.have.property('statusCode', 201)
-            res.resume()
-            res.once('end', done)
-          })
-          req.end()
-        })
-
-        it('responds with a 409 error', done => {
-          const reqOptions = {
-            port: proxyPort,
-            headers: { 'x-tunnel-host': 'new.localhost' }
-          }
-          const req = request(reqOptions, res => {
-            expect(res).to.have.property('statusCode', 409)
-            res.resume()
-            res.once('end', done)
-          })
-          req.end()
-        })
-
-      })
-
-    })
-
   })
 
   describe('on upgrade', () => {
@@ -315,9 +315,8 @@ describe('server', () => {
     describe('for all upgrades', () => {
 
       it('requires a host header', done => {
-        const socket = connect({ port: proxyPort })
+        const socket = connect(proxyPort)
         socket.once('end', done)
-        socket.once('error', done)
         socket.write(
           'GET / HTTP/1.1\r\n' +
           'Connection: Upgrade\r\n' +
