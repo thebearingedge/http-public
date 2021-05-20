@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto'
 import { pipeline, Readable } from 'stream'
 import { connect, AddressInfo, Socket } from 'net'
 import { request, Server as HttpServer } from 'http'
@@ -8,6 +9,9 @@ import { noop, CLIENT_ACK } from './util'
 
 describe('server', () => {
 
+  const host = 'localhost'
+  const token = randomBytes(8).toString('base64')
+
   let proxyPort: number
   let proxyServer: HttpServer
   let localPort: number
@@ -16,8 +20,8 @@ describe('server', () => {
   let localWebSocketServer: WebSocketServer
 
   beforeEach('start servers', done => {
-    proxyServer = createServer().listen(0, 'localhost', () => {
-      ({ port: proxyPort } = proxyServer.address() as AddressInfo)
+    proxyServer = createServer({ host, token }).listen(0, host, () => {
+      ;({ port: proxyPort } = proxyServer.address() as AddressInfo)
       localServer = new HttpServer((req, res) => {
         if (req.url === '/broken') {
           req.destroy()
@@ -34,7 +38,7 @@ describe('server', () => {
       })
       localWebSocketServer = new WebSocketServer({ server: localServer })
       localWebSocketServer.on('connection', ws => ws.send('success!'))
-      localServer.listen(0, 'localhost', () => {
+      localServer.listen(0, host, () => {
         ({ port: localPort } = localServer.address() as AddressInfo)
         localSocket = connect(localPort)
         localSocket.once('connect', done)
@@ -65,11 +69,49 @@ describe('server', () => {
 
     describe('for client requests', () => {
 
+      context('when the x-tunnel-token header is not set', () => {
+
+        it('responds with a 403 error', done => {
+          const reqOptions = {
+            port: proxyPort
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 403)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
+      })
+
+      context('when the x-tunnel-token header is not correct', () => {
+
+        it('responds with a 403 error', done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: {
+              'x-tunnel-token': 'not the token'
+            }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 403)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
+      })
+
       context('when the x-tunnel-host header is not set', () => {
 
         it('responds with a 400 error', done => {
           const reqOptions = {
-            port: proxyPort
+            port: proxyPort,
+            headers: {
+              'x-tunnel-token': token
+            }
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 400)
@@ -87,7 +129,8 @@ describe('server', () => {
           const reqOptions = {
             port: proxyPort,
             headers: {
-              'x-tunnel-host': '@'
+              'x-tunnel-host': '@',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions, res => {
@@ -106,7 +149,8 @@ describe('server', () => {
           const reqOptions = {
             port: proxyPort,
             headers: {
-              'x-tunnel-host': 'new.localhost'
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions, res => {
@@ -124,7 +168,10 @@ describe('server', () => {
         beforeEach('create a tunnel agent', done => {
           const reqOptions = {
             port: proxyPort,
-            headers: { 'x-tunnel-host': 'new.localhost' }
+            headers: {
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
+            }
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
@@ -137,7 +184,10 @@ describe('server', () => {
         it('responds with a 409 error', done => {
           const reqOptions = {
             port: proxyPort,
-            headers: { 'x-tunnel-host': 'new.localhost' }
+            headers: {
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
+            }
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 409)
@@ -178,7 +228,8 @@ describe('server', () => {
           const reqOptions = {
             port: proxyPort,
             headers: {
-              'x-tunnel-host': 'new.localhost'
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions, res => {
@@ -207,7 +258,8 @@ describe('server', () => {
               headers: {
                 connection: 'upgrade',
                 upgrade: '@http-public/tunnel',
-                'x-tunnel-host': 'new.localhost'
+                'x-tunnel-host': 'new.localhost',
+                'x-tunnel-token': token
               }
             }
             const tunnelReq = request(tunnelReqOptions)
@@ -228,7 +280,8 @@ describe('server', () => {
           const clientReqOptions = {
             port: proxyPort,
             headers: {
-              'x-tunnel-host': 'new.localhost'
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
             }
           }
           const clientReq = request(clientReqOptions, res => {
@@ -240,7 +293,8 @@ describe('server', () => {
                 headers: {
                   connection: 'upgrade',
                   upgrade: '@http-public/tunnel',
-                  'x-tunnel-host': 'new.localhost'
+                  'x-tunnel-host': 'new.localhost',
+                  'x-tunnel-token': token
                 }
               }
               const tunnelReq = request(tunnelReqOptions)
@@ -354,7 +408,8 @@ describe('server', () => {
             port: proxyPort,
             headers: {
               connection: 'upgrade',
-              upgrade: '@http-public/tunnel'
+              upgrade: '@http-public/tunnel',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions).once('error', err => {
@@ -374,7 +429,8 @@ describe('server', () => {
             headers: {
               connection: 'upgrade',
               upgrade: '@http-public/tunnel',
-              'x-tunnel-host': 'unknown.localhost'
+              'x-tunnel-host': 'unknown.localhost',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions).once('error', err => {
@@ -392,7 +448,8 @@ describe('server', () => {
           const reqOptions = {
             port: proxyPort,
             headers: {
-              'x-tunnel-host': 'new.localhost'
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions, res => {
@@ -409,7 +466,8 @@ describe('server', () => {
             headers: {
               connection: 'upgrade',
               upgrade: '@http-public/tunnel',
-              'x-tunnel-host': 'new.localhost'
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions).once('upgrade', (_, tunnel) => {
@@ -424,7 +482,8 @@ describe('server', () => {
             headers: {
               connection: 'upgrade',
               upgrade: '@http-public/tunnel',
-              'x-tunnel-host': 'new.localhost'
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions).once('upgrade', (_, tunnel) => {
@@ -467,7 +526,8 @@ describe('server', () => {
           const reqOptions = {
             port: proxyPort,
             headers: {
-              'x-tunnel-host': 'new.localhost'
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions, res => {
@@ -493,7 +553,8 @@ describe('server', () => {
             headers: {
               connection: 'upgrade',
               upgrade: '@http-public/tunnel',
-              'x-tunnel-host': 'new.localhost'
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
             }
           }
           const tunnelReq = request(tunnelReqOptions)
@@ -546,7 +607,8 @@ describe('server', () => {
           const clientReqOptions = {
             port: proxyPort,
             headers: {
-              'x-tunnel-host': 'new.localhost'
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
             }
           }
           const clientReq = request(clientReqOptions, res => {
@@ -558,7 +620,8 @@ describe('server', () => {
                 headers: {
                   connection: 'upgrade',
                   upgrade: '@http-public/tunnel',
-                  'x-tunnel-host': 'new.localhost'
+                  'x-tunnel-host': 'new.localhost',
+                  'x-tunnel-token': token
                 }
               }
               const tunnelReq = request(tunnelReqOptions)

@@ -10,14 +10,15 @@ import { TunnelAgent } from './tunnel-agent'
 import { noop, isUndefined, getHostname, getRequestHead } from './util'
 
 type ServerOptions = {
-  host?: string
+  host: string
+  token: string
 }
 
-export const createServer = (options: ServerOptions = {}): HttpServer => {
+export const createServer = (options: ServerOptions): HttpServer => {
 
   const server = new HttpServer()
   const agents = new Map<string, TunnelAgent>()
-  const { host: proxyHost = 'localhost' } = options
+  const { host: proxyHost, token } = options
 
   server.on('request', (req: Req, res: Res) => {
     const host = getHostname(req.headers.host)
@@ -26,6 +27,11 @@ export const createServer = (options: ServerOptions = {}): HttpServer => {
       return
     }
     if (host === proxyHost) {
+      const tokenHeader = req.headers['x-tunnel-token']
+      if (isUndefined(tokenHeader) || tokenHeader !== token) {
+        res.writeHead(403).end()
+        return
+      }
       onClientRequest(req, res)
       return
     }
