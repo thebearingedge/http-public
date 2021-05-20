@@ -28,7 +28,7 @@ export class TunnelAgent extends Agent {
     // wait for the client to be ready
     return (data: Buffer) => {
       if (data.toString() !== CLIENT_ACK) {
-        socket.destroy()
+        socket.destroy(new Error('bad client ack'))
         return
       }
       const onConnection = this.connectionQueue.shift()

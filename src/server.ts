@@ -77,17 +77,13 @@ export const createServer = (options: ServerOptions = {}): HttpServer => {
       res.writeHead(404).end()
       return
     }
-    const { method, url, headers } = req
-    const tunnelReqOptions = { method, url, headers, agent }
+    const { method, url: path, headers } = req
+    const tunnelReqOptions = { method, path, headers, agent }
     const tunnelReq = request(tunnelReqOptions, tunnelRes => {
       res.writeHead(tunnelRes.statusCode!, tunnelRes.rawHeaders)
       pipeline([tunnelRes, res], noop)
     })
     tunnelReq.once('error', () => {
-      if (res.headersSent) {
-        res.destroy()
-        return
-      }
       res.writeHead(502).end()
       tunnelReq.destroy()
     })
@@ -129,10 +125,12 @@ export const createServer = (options: ServerOptions = {}): HttpServer => {
       return
     }
     agent.createConnection(null, (err, _tunnel) => {
-      /* c8 ignore next */
-      if (err != null) return socket.destroy()
+      if (err != null) {
+        socket.destroy()
+        return
+      }
       const tunnel = _tunnel as Socket
-      if (!socket.readable || !socket.writable) {
+      if (!socket.writable || !socket.readable) {
         tunnel.destroy()
         socket.destroy()
         return

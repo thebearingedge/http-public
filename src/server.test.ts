@@ -1,4 +1,4 @@
-import { pipeline } from 'stream'
+import { pipeline, Readable } from 'stream'
 import { connect, AddressInfo, Socket } from 'net'
 import { request, Server as HttpServer } from 'http'
 import WebSocket, { Server as WebSocketServer } from 'ws'
@@ -18,7 +18,20 @@ describe('server', () => {
   beforeEach('start servers', done => {
     proxyServer = createServer().listen(0, 'localhost', () => {
       ({ port: proxyPort } = proxyServer.address() as AddressInfo)
-      localServer = new HttpServer((_, res) => res.end())
+      localServer = new HttpServer((req, res) => {
+        if (req.url === '/broken') {
+          req.destroy()
+          return
+        }
+        if (req.url === '/streaming') {
+          const data = Readable.from(async function * () {
+            while (true) yield await Promise.resolve('data')
+          }())
+          data.pipe(res)
+          return
+        }
+        res.end()
+      })
       localWebSocketServer = new WebSocketServer({ server: localServer })
       localWebSocketServer.on('connection', ws => ws.send('success!'))
       localServer.listen(0, 'localhost', () => {
@@ -72,6 +85,7 @@ describe('server', () => {
       })
 
       context('when no tunnels are available for the hostname', () => {
+
         beforeEach('create a tunnel agent', done => {
           const reqOptions = {
             port: proxyPort,
@@ -167,20 +181,39 @@ describe('server', () => {
           req.end()
         })
 
-      })
-
-      context('when a tunnel connection breaks', () => {
-
-        context('and headers have not been transferred', () => {
-
-          it('responds with a 502 error')
-
+        it('responds with a 502 error on broken connections', done => {
+          const reqOptions = {
+            path: '/broken',
+            port: proxyPort,
+            headers: {
+              host: 'new.localhost'
+            }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 502)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
         })
 
-        context('and headers have been transferred', () => {
-
-          it('terminates the request')
-
+        it('terminates the request after headers are transferred', done => {
+          const reqOptions = {
+            path: '/streaming',
+            port: proxyPort,
+            headers: {
+              host: 'new.localhost'
+            }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 200)
+            res.once('data', () => localSocket.destroy())
+            res.once('error', err => {
+              expect(err).to.be.an('error', 'aborted')
+              done()
+            })
+          })
+          req.end()
         })
 
       })
@@ -386,6 +419,22 @@ describe('server', () => {
           req.end()
         })
 
+        it('requires a valid CLIENT_ACK', done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: {
+              connection: 'upgrade',
+              upgrade: '@http-public/tunnel',
+              'x-tunnel-host': 'new.localhost'
+            }
+          }
+          const req = request(reqOptions).once('upgrade', (_, tunnel) => {
+            tunnel.once('close', () => done())
+            tunnel.write('\x11')
+          })
+          req.end()
+        })
+
       })
 
     })
@@ -440,7 +489,6 @@ describe('server', () => {
             expect(data.toString()).to.equal('success!')
             done()
           })
-          webSocket.once('error', done)
           const tunnelReqOptions = {
             port: proxyPort,
             headers: {
@@ -455,6 +503,38 @@ describe('server', () => {
             stream.write(CLIENT_ACK)
           })
           tunnelReq.end()
+        })
+
+        it('handles aborted upgrades', done => {
+          const upgradeReqOptions = {
+            port: proxyPort,
+            headers: {
+              host: 'new.localhost',
+              connection: 'upgrade',
+              upgrade: 'doo ett!'
+            }
+          }
+          const upgradeReq = request(upgradeReqOptions)
+          upgradeReq.once('error', noop)
+          upgradeReq.once('socket', () => {
+            upgradeReq.end(() => {
+              upgradeReq.destroy()
+              const tunnelReqOptions = {
+                port: proxyPort,
+                headers: {
+                  connection: 'upgrade',
+                  upgrade: '@http-public/tunnel',
+                  'x-tunnel-host': 'new.localhost'
+                }
+              }
+              const tunnelReq = request(tunnelReqOptions)
+              tunnelReq.once('upgrade', (_, tunnel) => {
+                tunnel.once('close', () => done())
+                tunnel.write('\x00')
+              })
+              tunnelReq.end()
+            })
+          })
         })
 
       })
