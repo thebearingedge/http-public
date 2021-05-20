@@ -541,6 +541,8 @@ describe('server', () => {
 
       context('when a tunnel connection is available for the hostname', () => {
 
+        let tunnel: Socket
+
         beforeEach('create a tunnel agent and tunnel', done => {
           const clientReqOptions = {
             port: proxyPort,
@@ -561,7 +563,8 @@ describe('server', () => {
                 }
               }
               const tunnelReq = request(tunnelReqOptions)
-              tunnelReq.once('upgrade', (_, tunnel) => {
+              tunnelReq.once('upgrade', (_, _tunnel) => {
+                tunnel = _tunnel
                 const stream = pipeline([tunnel, localSocket, tunnel], noop)
                 stream.write(CLIENT_ACK, done)
               })
@@ -583,11 +586,18 @@ describe('server', () => {
           })
         })
 
-      })
-
-      context('when the remote connection breaks', () => {
-
-        it('destroys the tunnel')
+        it('closes broken tunnel connections', done => {
+          tunnel.once('end', done)
+          const webSocket = new WebSocket(`ws://localhost:${proxyPort}`, {
+            headers: {
+              host: 'new.localhost'
+            }
+          })
+          webSocket.on('message', data => {
+            expect(String(data)).to.equal('success!')
+            webSocket.terminate()
+          })
+        })
 
       })
 
