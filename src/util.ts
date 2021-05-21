@@ -26,3 +26,5 @@ export const isString = (value: unknown): value is string => {
 export const noop = (..._args: any[]): void => {}
 
 export const CLIENT_ACK = '\x00'
+
+export const IDLE_TIMEOUT = 10000

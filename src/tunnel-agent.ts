@@ -1,7 +1,7 @@
 import { Socket } from 'net'
 import EventEmitter from 'events'
 import { Agent, AgentOptions } from 'http'
-import { isUndefined, CLIENT_ACK } from './util'
+import { isUndefined, CLIENT_ACK, IDLE_TIMEOUT } from './util'
 
 export type OnConnection = {
   (err: Error | null, socket?: Socket): void
@@ -15,8 +15,6 @@ export interface TunnelAgent extends Agent, EventEmitter {
   on(event: 'timeout', onTimeout: (this: TunnelAgent) => void): this
   emit(event: 'timeout'): boolean
 }
-
-export const IDLE_TIMEOUT = 10000
 
 export class TunnelAgent extends Agent {
 

@@ -6,8 +6,7 @@ import { expect } from 'chai'
 import { useFakeTimers, SinonFakeTimers } from 'sinon'
 import WebSocket, { Server as WebSocketServer } from 'ws'
 import { createServer } from './server'
-import { noop, CLIENT_ACK } from './util'
-import { IDLE_TIMEOUT } from './tunnel-agent'
+import { noop, CLIENT_ACK, IDLE_TIMEOUT } from './util'
 
 describe('server', () => {
 
