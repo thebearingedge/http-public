@@ -28,11 +28,6 @@ export const createServer = (options: ServerOptions): HttpServer => {
       return
     }
     if (host === proxyHost) {
-      const tokenHeader = req.headers['x-tunnel-token']
-      if (isUndefined(tokenHeader) || tokenHeader !== token) {
-        res.writeHead(403).end()
-        return
-      }
       onClientRequest(req, res)
       return
     }
@@ -65,6 +60,11 @@ export const createServer = (options: ServerOptions): HttpServer => {
   return server
 
   function onClientRequest(req: Req, res: Res): void {
+    const tokenHeader = req.headers['x-tunnel-token']
+    if (isUndefined(tokenHeader) || tokenHeader !== token) {
+      res.writeHead(403).end()
+      return
+    }
     const host = getHostname(req.headers['x-tunnel-host'])
     if (isUndefined(host)) {
       res.writeHead(400).end()
