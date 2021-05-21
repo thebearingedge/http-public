@@ -30,7 +30,7 @@ describe('server', () => {
         }
         if (req.url === '/streaming') {
           const data = Readable.from(async function * () {
-            while (true) yield await Promise.resolve('data')
+            while (true) yield 'data'
           }())
           data.pipe(res)
           return
