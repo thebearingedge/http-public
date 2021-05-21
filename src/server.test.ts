@@ -2,10 +2,12 @@ import { randomBytes } from 'crypto'
 import { pipeline, Readable } from 'stream'
 import { connect, AddressInfo, Socket } from 'net'
 import { request, Server as HttpServer } from 'http'
-import WebSocket, { Server as WebSocketServer } from 'ws'
 import { expect } from 'chai'
+import { useFakeTimers, SinonFakeTimers } from 'sinon'
+import WebSocket, { Server as WebSocketServer } from 'ws'
 import { createServer } from './server'
 import { noop, CLIENT_ACK } from './util'
+import { IDLE_TIMEOUT } from './tunnel-agent'
 
 describe('server', () => {
 
@@ -165,7 +167,10 @@ describe('server', () => {
 
       context('when the tunnel hostname is occupied', () => {
 
+        let clock: SinonFakeTimers
+
         beforeEach('create a tunnel agent', done => {
+          clock = useFakeTimers({ toFake: ['setTimeout'] })
           const reqOptions = {
             port: proxyPort,
             headers: {
@@ -181,6 +186,8 @@ describe('server', () => {
           req.end()
         })
 
+        afterEach(() => clock.restore())
+
         it('responds with a 409 error', done => {
           const reqOptions = {
             port: proxyPort,
@@ -191,6 +198,23 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 409)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
+        it(`expires the tunnel agent after ${IDLE_TIMEOUT}ms`, done => {
+          clock.tick(IDLE_TIMEOUT)
+          const reqOptions = {
+            port: proxyPort,
+            headers: {
+              'x-tunnel-host': 'new.localhost',
+              'x-tunnel-token': token
+            }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 201)
             res.resume()
             res.once('end', done)
           })

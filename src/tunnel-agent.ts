@@ -1,4 +1,5 @@
 import { Socket } from 'net'
+import EventEmitter from 'events'
 import { Agent, AgentOptions } from 'http'
 import { isUndefined, CLIENT_ACK } from './util'
 
@@ -10,17 +11,40 @@ export type AgentOverrides = 'keepAlive' | 'maxFreeSockets'
 
 export type TunnelAgentOptions = Omit<AgentOptions, AgentOverrides>
 
+export interface TunnelAgent extends Agent, EventEmitter {
+  on(event: 'timeout', onTimeout: (this: TunnelAgent) => void): this
+  emit(event: 'timeout'): boolean
+}
+
+export const IDLE_TIMEOUT = 10000
+
 export class TunnelAgent extends Agent {
 
+  private closed: boolean
   private tunnels: Socket[]
   private tunnelQueue: Socket[]
-  private connectionQueue: OnConnection[]
+  private requestQueue: OnConnection[]
+  private idleTimeout?: NodeJS.Timeout
 
   constructor(options: TunnelAgentOptions = {}) {
     super({ ...options, keepAlive: true, maxFreeSockets: 1 })
+    this.closed = false
     this.tunnels = []
     this.tunnelQueue = []
-    this.connectionQueue = []
+    this.requestQueue = []
+    this.idleTimeout = setTimeout(this.onIdleTimeout, IDLE_TIMEOUT).unref()
+  }
+
+  onIdleTimeout = (): void => {
+    this.emit('timeout')
+    this.destroy()
+  }
+
+  clearIdleTimeout(): void {
+    if (!isUndefined(this.idleTimeout)) {
+      clearTimeout(this.idleTimeout)
+      this.idleTimeout = undefined
+    }
   }
 
   onClientAck(socket: Socket) {
@@ -31,7 +55,8 @@ export class TunnelAgent extends Agent {
         socket.destroy(new Error('bad client ack'))
         return
       }
-      const onConnection = this.connectionQueue.shift()
+      this.clearIdleTimeout()
+      const onConnection = this.requestQueue.shift()
       if (isUndefined(onConnection)) {
         this.tunnelQueue.push(socket)
         return
@@ -45,6 +70,9 @@ export class TunnelAgent extends Agent {
       socket.destroy()
       this.tunnels = this.tunnels.filter(tunnel => tunnel !== socket)
       this.tunnelQueue = this.tunnelQueue.filter(tunnel => tunnel !== socket)
+      if (!this.closed && this.tunnels.length === 0) {
+        this.idleTimeout = setTimeout(this.onIdleTimeout, IDLE_TIMEOUT).unref()
+      }
     }
   }
 
@@ -57,7 +85,7 @@ export class TunnelAgent extends Agent {
   createConnection(_: null, onConnection: OnConnection): void {
     const socket = this.tunnelQueue.shift()
     if (isUndefined(socket)) {
-      this.connectionQueue.push(onConnection)
+      this.requestQueue.push(onConnection)
       return
     }
     setImmediate(onConnection, null, socket)
@@ -71,14 +99,16 @@ export class TunnelAgent extends Agent {
     this.tunnels.push(socket)
   }
 
-  destroy(): void {
+  destroy = (): void => {
+    this.closed = true
+    this.clearIdleTimeout()
     this.tunnels.forEach(socket => socket.destroy())
-    this.connectionQueue.forEach(onConnection => {
+    this.requestQueue.forEach(onConnection => {
       onConnection(new Error('agent closed'))
     })
     this.tunnels = []
     this.tunnelQueue = []
-    this.connectionQueue = []
+    this.requestQueue = []
     super.destroy()
   }
 

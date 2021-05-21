@@ -18,6 +18,7 @@ export const createServer = (options: ServerOptions): HttpServer => {
 
   const server = new HttpServer()
   const agents = new Map<string, TunnelAgent>()
+
   const { host: proxyHost, token } = options
 
   server.on('request', (req: Req, res: Res) => {
@@ -73,7 +74,9 @@ export const createServer = (options: ServerOptions): HttpServer => {
       res.writeHead(409).end()
       return
     }
-    agents.set(host, new TunnelAgent())
+    const agent = new TunnelAgent()
+    agents.set(host, agent)
+    agent.once('timeout', () => agents.delete(host))
     res.writeHead(201).end()
   }
 
