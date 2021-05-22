@@ -11,6 +11,10 @@ jobs:
     strategy:
       matrix:
         node-version: [14.x, 16.x]
+        include:
+          - node-version: 16.x
+            env:
+              COVERAGE: 1
     steps:
       - name: Setup
         uses: actions/checkout@v2
@@ -21,6 +25,7 @@ jobs:
       - run: npm ci
       - run: npm run cover
       - name: Publish Coverage Report
-        env:
-            GITHUB_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
-        run: npx coveralls --service=github
+        if: ${{ matrix.env.COVERAGE }}
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: '${{ secrets.COVERALLS_TOKEN }}'
