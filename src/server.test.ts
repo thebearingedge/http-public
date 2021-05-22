@@ -662,7 +662,7 @@ describe('server', () => {
               const tunnelReq = request(tunnelReqOptions)
               tunnelReq.once('upgrade', (_, tunnel) => {
                 tunnel.once('end', done)
-                tunnel.write('\x00')
+                tunnel.write(CLIENT_ACK)
               })
               tunnelReq.end()
             })

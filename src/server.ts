@@ -7,7 +7,7 @@ import {
 import { Socket } from 'net'
 import { pipeline } from 'stream'
 import { TunnelAgent } from './tunnel-agent'
-import { noop, isUndefined, getHostname, getRequestHead } from './util'
+import { head, noop, isUndefined, getHostname, getRequestHead } from './util'
 
 type ServerOptions = {
   host: string
@@ -37,11 +37,10 @@ export const createServer = (options: ServerOptions): HttpServer => {
   server.on('upgrade', (req: Req, socket: Socket) => {
     const host = getHostname(req.headers.host)
     if (isUndefined(host)) {
-      socket.end(
-        'HTTP/1.1 400 Bad Request\r\n' +
-        'Connection: close\r\n' +
-        '\r\n'
-      )
+      socket.end(head`
+        HTTP/1.1 400 Bad Request
+        Connection: close
+      `)
       return
     }
     if (host === proxyHost) {
@@ -106,57 +105,51 @@ export const createServer = (options: ServerOptions): HttpServer => {
 
   function onClientUpgrade(req: Req, socket: Socket): void {
     if (req.headers.upgrade !== '@http-public/tunnel') {
-      socket.end(
-        'HTTP/1.1 400 Bad Request\r\n' +
-        'Connection: close\r\n' +
-        '\r\n'
-      )
+      socket.end(head`
+        HTTP/1.1 400 Bad Request
+        Connection: close
+      `)
       return
     }
     const host = getHostname(req.headers['x-tunnel-host'])
     if (isUndefined(host)) {
-      socket.end(
-        'HTTP/1.1 400 Bad Request\r\n' +
-        'Connection: close\r\n' +
-        '\r\n'
-      )
+      socket.end(head`
+        HTTP/1.1 400 Bad Request
+        Connection: close
+      `)
       return
     }
     const agent = agents.get(host)
     if (isUndefined(agent)) {
-      socket.end(
-        'HTTP/1.1 404 Not Found\r\n' +
-        'Connection: close\r\n' +
-        '\r\n'
-      )
+      socket.end(head`
+        HTTP/1.1 404 Not Found
+        Connection: close
+      `)
       return
     }
-    socket.write(
-      'HTTP/1.1 101 Switching Protocols\r\n' +
-      'Connection: upgrade\r\n' +
-      'upgrade: @http-public/tunnel\r\n' +
-      '\r\n'
-    )
+    socket.write(head`
+      HTTP/1.1 101 Switching Protocols
+      Connection: upgrade
+      Upgrade: @http-public/tunnel
+    `)
     agent.registerTunnel(socket)
   }
 
   function onRemoteUpgrade(host: string, req: Req, socket: Socket): void {
     const agent = agents.get(host)
     if (isUndefined(agent)) {
-      socket.end(
-        'HTTP/1.1 404 Not Found\r\n' +
-        'Connection: close\r\n' +
-        '\r\n'
-      )
+      socket.end(head`
+        HTTP/1.1 404 Not Found
+        Connection: close
+      `)
       return
     }
     agent.createConnection(null, (err, _tunnel) => {
       if (err != null) {
-        socket.end(
-          'HTTP/1.1 404 Not Found\r\n' +
-          'Connection: close\r\n' +
-          '\r\n'
-        )
+        socket.end(head`
+          HTTP/1.1 404 Not Found
+          Connection: close
+        `)
         return
       }
       const tunnel = _tunnel as Socket

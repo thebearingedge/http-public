@@ -23,7 +23,18 @@ export const isString = (value: unknown): value is string => {
   return typeof value === 'string'
 }
 
+export const head = ([text]: TemplateStringsArray): string => {
+  return text
+    .trim()
+    .split('\n')
+    .map(line => line.trimStart())
+    .concat(CRLF)
+    .join(CRLF)
+}
+
 export const noop = (..._args: any[]): void => {}
+
+export const CRLF = '\r\n'
 
 export const CLIENT_ACK = '\x00'
 
