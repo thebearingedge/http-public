@@ -2,7 +2,8 @@ import {
   request,
   Server as HttpServer,
   IncomingMessage as Req,
-  ServerResponse as Res
+  ServerResponse as Res,
+  RequestOptions
 } from 'http'
 import { Socket } from 'net'
 import { pipeline } from 'stream'
@@ -89,9 +90,10 @@ export const createServer = (options: ServerOptions): HttpServer => {
       res.writeHead(404).end()
       return
     }
-    // TODO - forward the raw headers instead
-    const { method, url: path, headers } = req
-    const tunnelReqOptions = { method, path, headers, agent }
+    const { method, url: path, rawHeaders: headers } = req
+    const tunnelReqOptions = {
+      method, path, headers, agent
+    } as unknown as RequestOptions
     const tunnelReq = request(tunnelReqOptions, tunnelRes => {
       res.writeHead(tunnelRes.statusCode!, tunnelRes.rawHeaders)
       pipeline([tunnelRes, res], noop)
