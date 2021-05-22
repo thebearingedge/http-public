@@ -135,7 +135,11 @@ export const createServer = (options: ServerOptions): HttpServer => {
     }
     agent.createConnection(null, (err, _tunnel) => {
       if (err != null) {
-        socket.destroy()
+        socket.end(
+          'HTTP/1.1 504 Gateway Timeout\r\n' +
+          'Connection: close\r\n' +
+          '\r\n'
+        )
         return
       }
       const tunnel = _tunnel as Socket

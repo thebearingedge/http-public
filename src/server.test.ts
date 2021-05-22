@@ -545,7 +545,10 @@ describe('server', () => {
 
       context('when no tunnels are available for the hostname', () => {
 
+        let clock: SinonFakeTimers
+
         beforeEach('create a tunnel agent', done => {
+          clock = useFakeTimers({ toFake: ['setTimeout'] })
           const reqOptions = {
             port: proxyPort,
             headers: {
@@ -560,6 +563,8 @@ describe('server', () => {
           })
           req.end()
         })
+
+        afterEach(() => clock.restore())
 
         it('enqueues the upgrade', done => {
           const webSocket = new WebSocket(`ws://localhost:${proxyPort}`, {
@@ -588,6 +593,37 @@ describe('server', () => {
           tunnelReq.end()
         })
 
+        it('responds with a 504 for timed out agents', done => {
+          const upgradeReqOptions = {
+            port: proxyPort,
+            headers: {
+              host: 'new.localhost',
+              connection: 'upgrade',
+              upgrade: 'doo ett!'
+            }
+          }
+          const upgradeReq = request(upgradeReqOptions, res => {
+            expect(res).to.have.property('statusCode', 504)
+            res.resume()
+            res.once('end', done)
+          })
+          upgradeReq.end(() => {
+            const tunnelReqOptions = {
+              port: proxyPort,
+              headers: {
+                connection: 'upgrade',
+                upgrade: '@http-public/tunnel',
+                'x-tunnel-host': 'new.localhost'
+              }
+            }
+            const tunnelReq = request(tunnelReqOptions)
+            tunnelReq.once('upgrade', () => {
+              clock.tick(IDLE_TIMEOUT)
+            })
+            tunnelReq.end()
+          })
+        })
+
         it('handles aborted upgrades', done => {
           const upgradeReqOptions = {
             port: proxyPort,
@@ -612,7 +648,7 @@ describe('server', () => {
               }
               const tunnelReq = request(tunnelReqOptions)
               tunnelReq.once('upgrade', (_, tunnel) => {
-                tunnel.once('close', () => done())
+                tunnel.once('end', done)
                 tunnel.write('\x00')
               })
               tunnelReq.end()
