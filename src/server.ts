@@ -136,7 +136,7 @@ export const createServer = (options: ServerOptions): HttpServer => {
     agent.createConnection(null, (err, _tunnel) => {
       if (err != null) {
         socket.end(
-          'HTTP/1.1 504 Gateway Timeout\r\n' +
+          'HTTP/1.1 404 Not Found\r\n' +
           'Connection: close\r\n' +
           '\r\n'
         )

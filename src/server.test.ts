@@ -593,7 +593,7 @@ describe('server', () => {
           tunnelReq.end()
         })
 
-        it('responds with a 504 for timed out agents', done => {
+        it('responds with a 404 for timed out agents', done => {
           const upgradeReqOptions = {
             port: proxyPort,
             headers: {
@@ -603,7 +603,7 @@ describe('server', () => {
             }
           }
           const upgradeReq = request(upgradeReqOptions, res => {
-            expect(res).to.have.property('statusCode', 504)
+            expect(res).to.have.property('statusCode', 404)
             res.resume()
             res.once('end', done)
           })
