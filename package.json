@@ -4,8 +4,9 @@
   "description": "Forward HTTP traffic from the public internet to localhost.",
   "main": "index.js",
   "scripts": {
-    "lint:staged": "lint-staged",
+    "build": "rimraf build/ && tsc -p tsconfig.prod.json",
     "test": "mocha",
+    "lint:staged": "lint-staged",
     "tdd": "npm -s t -- -R min -w",
     "cover": "c8 -r text -r html npm -s t",
     "postinstall": "is-ci || husky install"
@@ -49,6 +50,7 @@
     "is-ci": "^3.0.0",
     "lint-staged": "^11.0.0",
     "mocha": "^8.3.2",
+    "rimraf": "^3.0.2",
     "sinon": "^10.0.0",
     "ts-node": "^9.1.1",
     "ts-node-dev": "^1.1.6",

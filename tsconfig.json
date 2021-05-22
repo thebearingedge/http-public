@@ -4,7 +4,10 @@
     "declaration": true,
     "esModuleInterop": true,
     "module": "commonjs",
-    "outDir": "build/",
-    "target": "es2019"
-  }
+    "target": "es2019",
+    "outDir": "build/"
+  },
+  "include": [
+    "src/"
+  ]
 }
