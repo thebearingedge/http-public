@@ -80,7 +80,7 @@ export class TunnelAgent extends Agent {
     }
   }
 
-  createConnection(_: null, onConnection: OnConnection): void {
+  createConnection(_: any, onConnection: OnConnection): void {
     const socket = this.tunnelQueue.shift()
     if (isUndefined(socket)) {
       this.requestQueue.push(onConnection)
