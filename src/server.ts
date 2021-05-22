@@ -90,6 +90,7 @@ export const createServer = (options: ServerOptions): HttpServer => {
       res.writeHead(404).end()
       return
     }
+    // TODO - forward the raw headers instead
     const { method, url: path, headers } = req
     const tunnelReqOptions = { method, path, headers, agent }
     const tunnelReq = request(tunnelReqOptions, tunnelRes => {
