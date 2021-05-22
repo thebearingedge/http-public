@@ -20,7 +20,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
       - run: npm run cover
-      - name: Coverage Report
-        uses: coverallsapp/github-action@v1.1.2
-        with:
-          github-token: ${{ secrets.COVERALLS_TOKEN }}
+      - name: Publish Coverage Report
+        env:
+            GITHUB_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
+        run: npx coveralls --service=github
