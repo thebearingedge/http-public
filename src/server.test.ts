@@ -365,7 +365,7 @@ describe('server', () => {
           req.end()
         })
 
-        it('terminates the request after headers are transferred', done => {
+        it('closes the response after headers are transferred', done => {
           const reqOptions = {
             path: '/streaming',
             port: proxyPort,
@@ -376,10 +376,7 @@ describe('server', () => {
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 200)
             res.once('data', () => localSocket.destroy())
-            res.once('error', err => {
-              expect(err).to.be.an('error', 'aborted')
-              done()
-            })
+            res.once('close', done)
           })
           req.end()
         })
