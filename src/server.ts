@@ -49,7 +49,7 @@ export const createServer = (options: ServerOptions): HttpServer => {
 
   const closeServer = server.close
 
-  server.close = (onClose: () => void) => {
+  server.close = (onClose: (err?: Error) => void) => {
     agents.forEach((agent, host) => {
       agents.delete(host)
       agent.destroy()
