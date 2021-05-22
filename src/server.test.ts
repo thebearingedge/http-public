@@ -57,13 +57,16 @@ describe('server', () => {
     describe('for all requests', () => {
 
       it('requires a host header', done => {
-        const socket = connect(proxyPort)
-        socket.once('error', done)
-        socket.once('data', data => {
-          expect(data.toString()).to.match(/^HTTP\/1\.1 400 Bad Request/)
-          done()
+        const reqOptions = {
+          port: proxyPort
+        }
+        const req = request(reqOptions, res => {
+          expect(res).to.have.property('statusCode', 400)
+          res.resume()
+          res.once('end', done)
         })
-        socket.end('GET / HTTP/1.1\r\n\r\n')
+        req.removeHeader('host')
+        req.end()
       })
 
     })
@@ -392,13 +395,20 @@ describe('server', () => {
     describe('for all upgrades', () => {
 
       it('requires a host header', done => {
-        const socket = connect(proxyPort)
-        socket.once('end', done)
-        socket.write(
-          'GET / HTTP/1.1\r\n' +
-          'Connection: Upgrade\r\n' +
-          'Upgrade: anything\r\n\r\n'
-        )
+        const reqOptions = {
+          port: proxyPort,
+          headers: {
+            connection: 'upgrade',
+            upgrade: 'anything'
+          }
+        }
+        const req = request(reqOptions, res => {
+          expect(res).to.have.property('statusCode', 400)
+          res.resume()
+          res.once('end', done)
+        })
+        req.removeHeader('host')
+        req.end()
       })
 
     })
@@ -407,7 +417,7 @@ describe('server', () => {
 
       context('when the uprade header is not @http-public/tunnel', () => {
 
-        it('hangs up the socket connection', done => {
+        it('responds with a 400 error', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {
@@ -415,9 +425,10 @@ describe('server', () => {
               upgrade: 'unsupported'
             }
           }
-          const req = request(reqOptions).once('error', err => {
-            expect(err).to.be.an('error', 'socket hang up')
-            done()
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 400)
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -426,7 +437,7 @@ describe('server', () => {
 
       context('when the x-tunnel-host header is not set', () => {
 
-        it('hangs up the socket connection', done => {
+        it('responds with a 400 error', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {
@@ -435,9 +446,10 @@ describe('server', () => {
               'x-tunnel-token': token
             }
           }
-          const req = request(reqOptions).once('error', err => {
-            expect(err).to.be.an('error', 'socket hang up')
-            done()
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 400)
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })
@@ -446,7 +458,7 @@ describe('server', () => {
 
       context('when no agent is serving the hostname', () => {
 
-        it('hangs up the socket connection', done => {
+        it('responds with a 404 error', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {
@@ -456,9 +468,10 @@ describe('server', () => {
               'x-tunnel-token': token
             }
           }
-          const req = request(reqOptions).once('error', err => {
-            expect(err).to.be.an('error', 'socket hang up')
-            done()
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 404)
+            res.resume()
+            res.once('end', done)
           })
           req.end()
         })

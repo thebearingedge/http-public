@@ -37,7 +37,11 @@ export const createServer = (options: ServerOptions): HttpServer => {
   server.on('upgrade', (req: Req, socket: Socket) => {
     const host = getHostname(req.headers.host)
     if (isUndefined(host)) {
-      socket.destroy()
+      socket.end(
+        'HTTP/1.1 400 Bad Request\r\n' +
+        'Connection: close\r\n' +
+        '\r\n'
+      )
       return
     }
     if (host === proxyHost) {
@@ -101,17 +105,29 @@ export const createServer = (options: ServerOptions): HttpServer => {
 
   function onClientUpgrade(req: Req, socket: Socket): void {
     if (req.headers.upgrade !== '@http-public/tunnel') {
-      socket.destroy()
+      socket.end(
+        'HTTP/1.1 400 Bad Request\r\n' +
+        'Connection: close\r\n' +
+        '\r\n'
+      )
       return
     }
     const host = getHostname(req.headers['x-tunnel-host'])
     if (isUndefined(host)) {
-      socket.destroy()
+      socket.end(
+        'HTTP/1.1 400 Bad Request\r\n' +
+        'Connection: close\r\n' +
+        '\r\n'
+      )
       return
     }
     const agent = agents.get(host)
     if (isUndefined(agent)) {
-      socket.destroy()
+      socket.end(
+        'HTTP/1.1 404 Not Found\r\n' +
+        'Connection: close\r\n' +
+        '\r\n'
+      )
       return
     }
     socket.write(
