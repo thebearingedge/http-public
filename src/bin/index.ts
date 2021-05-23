@@ -1,4 +1,4 @@
-#!/bin/env/node
+#!/usr/bin/env node
 import { join } from 'path'
 import { readFileSync } from 'fs'
 import { program } from 'commander'

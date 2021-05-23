@@ -2,9 +2,7 @@
   "name": "http-public",
   "version": "0.0.1",
   "description": "Forward HTTP traffic from the public internet to localhost.",
-  "bin": {
-    "http-public": "./build/bin"
-  },
+  "bin": "./build/bin/index.js",
   "scripts": {
     "demo": "ts-node src/bin/",
     "build": "rimraf build/ && tsc -p tsconfig.prod.json",
