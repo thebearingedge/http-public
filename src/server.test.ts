@@ -412,14 +412,56 @@ describe('server', () => {
 
     describe('for client upgrades', () => {
 
-      context('when the uprade header is not @http-public/tunnel', () => {
+      context('when the x-tunnel-token header is not set', () => {
+
+        it('responds with a 403 error', done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: {
+              connection: 'upgrade',
+              upgrade: 'anything'
+            }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 403)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
+      })
+
+      context('when the x-tunnel-token header is not correct', () => {
+
+        it('responds with a 403 error', done => {
+          const reqOptions = {
+            port: proxyPort,
+            headers: {
+              connection: 'upgrade',
+              upgrade: 'anything',
+              'x-tunnel-token': 'not the token'
+            }
+          }
+          const req = request(reqOptions, res => {
+            expect(res).to.have.property('statusCode', 403)
+            res.resume()
+            res.once('end', done)
+          })
+          req.end()
+        })
+
+      })
+
+      context('when the upgrade header is not @http-public/tunnel', () => {
 
         it('responds with a 400 error', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {
               connection: 'upgrade',
-              upgrade: 'unsupported'
+              upgrade: 'unsupported',
+              'x-tunnel-token': token
             }
           }
           const req = request(reqOptions, res => {
@@ -623,7 +665,8 @@ describe('server', () => {
               headers: {
                 connection: 'upgrade',
                 upgrade: '@http-public/tunnel',
-                'x-tunnel-host': 'new.localhost'
+                'x-tunnel-host': 'new.localhost',
+                'x-tunnel-token': token
               }
             }
             const tunnelReq = request(tunnelReqOptions)
@@ -653,7 +696,8 @@ describe('server', () => {
                 headers: {
                   connection: 'upgrade',
                   upgrade: '@http-public/tunnel',
-                  'x-tunnel-host': 'new.localhost'
+                  'x-tunnel-host': 'new.localhost',
+                  'x-tunnel-token': token
                 }
               }
               const tunnelReq = request(tunnelReqOptions)

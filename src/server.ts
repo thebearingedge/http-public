@@ -106,6 +106,14 @@ export const createServer = (options: ServerOptions): HttpServer => {
   }
 
   function onClientUpgrade(req: Req, socket: Socket): void {
+    const tokenHeader = req.headers['x-tunnel-token']
+    if (isUndefined(tokenHeader) || tokenHeader !== token) {
+      socket.end(head`
+        HTTP/1.1 403 Forbidden
+        Connection: close
+      `)
+      return
+    }
     if (req.headers.upgrade !== '@http-public/tunnel') {
       socket.end(head`
         HTTP/1.1 400 Bad Request
