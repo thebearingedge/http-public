@@ -18,6 +18,9 @@
     "extension": [
       "ts"
     ],
+    "exclude": [
+      "src/bin/*.ts"
+    ],
     "spec": [
       "src/**/*.ts"
     ],
