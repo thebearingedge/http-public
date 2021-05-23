@@ -2,8 +2,11 @@
   "name": "http-public",
   "version": "0.0.1",
   "description": "Forward HTTP traffic from the public internet to localhost.",
-  "main": "index.js",
+  "bin": {
+    "http-public": "./build/bin"
+  },
   "scripts": {
+    "demo": "ts-node src/bin/",
     "build": "rimraf build/ && tsc -p tsconfig.prod.json",
     "test": "mocha",
     "lint:staged": "lint-staged",
@@ -71,5 +74,8 @@
   "bugs": {
     "url": "https://github.com/thebearingedge/http-public/issues"
   },
-  "homepage": "https://github.com/thebearingedge/http-public#readme"
+  "homepage": "https://github.com/thebearingedge/http-public#readme",
+  "dependencies": {
+    "commander": "^7.2.0"
+  }
 }
