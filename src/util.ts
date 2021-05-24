@@ -1,10 +1,20 @@
 import { IncomingMessage as Req } from 'http'
 
+export type WebProtocol = 'http:' | 'https:'
+
 export const getHostname = (value: unknown): string | undefined => {
   if (!isString(value)) return
   try {
     return new URL(`http://${value}`).hostname
   } catch (err) {}
+}
+
+export const getPortNumber = ({ protocol, port }: URL): number => {
+  const portNumber = parseInt(port, 10)
+  if (Number.isNaN(portNumber)) {
+    return protocol === 'http:' ? 80 : 443
+  }
+  return portNumber
 }
 
 export const getRequestHead = (req: Req): string => {
@@ -21,6 +31,15 @@ export const isUndefined = (value: unknown): value is void => {
 
 export const isString = (value: unknown): value is string => {
   return typeof value === 'string'
+}
+
+export const once = (fn: (..._: any[]) => any): (...args: any[]) => void => {
+  let called = false
+  return (...args: any[]): void => {
+    if (called) return
+    called = true
+    fn(...args)
+  }
 }
 
 export const head = ([text]: TemplateStringsArray): string => {

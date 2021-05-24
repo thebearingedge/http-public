@@ -2,6 +2,7 @@
 import { join } from 'path'
 import { readFileSync } from 'fs'
 import { program } from 'commander'
+import { createClient } from '../client'
 import { createServer } from '../server'
 
 process
@@ -21,6 +22,27 @@ program
   .description('Forward HTTP traffic from the public Internet to localhost.')
 
 program
+  .command('client <remote> [local]', { isDefault: true })
+  .alias('c')
+  .description('start a local tunnel client', {
+    remote: 'public server origin \n(example: https://tunnel.my.site)',
+    local: 'local server origin \n(default: http://localhost:3000)'
+  })
+  .requiredOption('-t, --token <token>', 'access token for the tunnel server')
+  .requiredOption('-d, --subdomain <name>', 'subdomain for the tunnel')
+  .option('-l, --log', 'log requests arriving through the tunnel', false)
+  .option('-c, --connections <count>', 'number of connections to open', '10')
+  .action((remoteAddress, localAddress, config) => {
+    const remote = new URL(remoteAddress)
+    const local = new URL(localAddress)
+    const connections = parseInt(config.connections, 10)
+    const options = { ...config, remote, local, connections }
+    createClient(options, (err, client) => {
+      if (err != null) throw err
+    })
+  })
+
+program
   .command('server')
   .alias('s')
   .description('start a public tunnel server')
@@ -33,20 +55,6 @@ program
       // eslint-disable-next-line no-console
       console.log(`http-public listening at ${address}:${port} for ${host}\n`)
     })
-  })
-
-program
-  .command('client <serverUrl>', { isDefault: true })
-  .alias('c')
-  .description('start a local tunnel client')
-  .requiredOption('-t, --token <token>', 'access token for the tunnel server')
-  .requiredOption('-d, --subdomain <name>', 'subdomain for the tunneled app')
-  .option('-p, --local-port <port>', 'port number of the local app', '3000')
-  .option('-l, --local-host <host>', 'hostname of the local app', 'localhost')
-  .option('--secure', 'use https to connect to the local app', false)
-  .option('--verbose', 'log requests arriving through the tunnel', false)
-  .action((serverUrl, { token, secure, localHost, localPort, verbose }) => {
-
   })
 
 program.parse()
