@@ -1,11 +1,11 @@
 import { request as httpRequest, STATUS_CODES } from 'http'
 import { request as httpsRequest } from 'https'
-import { TunnelCluster } from './tunnel-cluster'
-import { once, getPortNumber } from './util'
+import { Client } from './tunnel-cluster'
+import { once } from './util'
 
 type ClientOptions = {
-  remote: URL
-  local: URL
+  proxyUrl: URL
+  localUrl: URL
   token: string
   subdomain: string
   connections: number
@@ -13,61 +13,59 @@ type ClientOptions = {
 }
 
 type OnCreate = {
-  (err: Error | null, client?: TunnelCluster): void
+  (err: Error | null, client?: Client): void
 }
 
 export const createClient = (options: ClientOptions, callback: OnCreate): void => {
 
-  const {
-    remote, local, token, subdomain, connections
-  } = options
+  const done = once(callback)
 
-  const { protocol: localProtocol, hostname: localHostname } = local
-  const localPort = getPortNumber(local)
-  const { protocol: remoteProtocol, hostname: remoteHostname } = remote
-  const remotePort = getPortNumber(remote)
+  const { proxyUrl, localUrl, token, subdomain, connections } = options
+
+  const { protocol: localProtocol } = localUrl
+  const { protocol: proxyProtocol } = proxyUrl
 
   if ((localProtocol !== 'http:' && localProtocol !== 'https:') ||
-      (remoteProtocol !== 'http:' && remoteProtocol !== 'https:')) {
-    throw new Error('url protocols must be "http:" or "https:"')
+      (proxyProtocol !== 'http:' && proxyProtocol !== 'https:')) {
+    const err = new Error('url protocols must be "http:" or "https:"')
+    setImmediate(done, err)
+    return
   }
 
-  const request = remoteProtocol === 'http:'
+  const request = proxyProtocol === 'http:'
     ? httpRequest
     : httpsRequest
 
-  const done = once(callback)
-
   const clientReqOptions = {
-    url: remote,
+    url: proxyUrl,
     headers: {
       'x-tunnel-token': token,
-      'x-tunnel-host': `${subdomain}.${remote.hostname}`
+      'x-tunnel-host': `${subdomain}.${proxyUrl.hostname}`
     }
   }
 
   const clientReq = request(clientReqOptions)
-    .on('error', done)
-    .on('response', res => {
-      if (res.statusCode !== 201) {
-        const statusText = STATUS_CODES[res.statusCode!]
-        done(new Error(
-        `remote server responded with status "${res.statusCode} ${statusText}"`
-        ))
-        return
-      }
-      done(null, new TunnelCluster({
-        remoteProtocol,
-        remoteHostname,
-        remotePort,
-        localProtocol,
-        localHostname,
-        localPort,
-        token,
-        subdomain,
-        connections
-      }))
+
+  clientReq.on('error', done)
+
+  clientReq.on('response', res => {
+    if (res.statusCode !== 201) {
+      const statusText = STATUS_CODES[res.statusCode!]
+      const err = new Error(
+        `proxy server responded with status "${res.statusCode} ${statusText}"`
+      )
+      done(err)
+      return
+    }
+    const client = new Client({
+      proxyUrl,
+      localUrl,
+      token,
+      subdomain,
+      connections
     })
+    done(null, client)
+  })
 
   clientReq.end()
 

@@ -33,12 +33,14 @@ export const isString = (value: unknown): value is string => {
   return typeof value === 'string'
 }
 
-export const once = (fn: (..._: any[]) => any): (...args: any[]) => void => {
+export const once = <A extends any[], R>(fn: (...a: A) => R): (...a: A) => R => {
   let called = false
-  return (...args: any[]): void => {
-    if (called) return
+  let result: R
+  return (...args: A): R => {
+    if (called) return result
     called = true
-    fn(...args)
+    result = fn(...args)
+    return result
   }
 }
 

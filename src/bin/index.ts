@@ -22,21 +22,21 @@ program
   .description('Forward HTTP traffic from the public Internet to localhost.')
 
 program
-  .command('client <remote> [local]', { isDefault: true })
+  .command('client <proxy> [local]', { isDefault: true })
   .alias('c')
   .description('start a local tunnel client', {
-    remote: 'public server origin \n(example: https://tunnel.my.site)',
+    proxy: 'public server origin \n(example: https://tunnel.my.site)',
     local: 'local server origin \n(default: http://localhost:3000)'
   })
   .requiredOption('-t, --token <token>', 'access token for the tunnel server')
   .requiredOption('-d, --subdomain <name>', 'subdomain for the tunnel')
   .option('-l, --log', 'log requests arriving through the tunnel', false)
   .option('-c, --connections <count>', 'number of connections to open', '10')
-  .action((remoteAddress, localAddress, config) => {
-    const remote = new URL(remoteAddress)
-    const local = new URL(localAddress)
+  .action((proxy, local, config) => {
+    const proxyUrl = new URL(proxy)
+    const localUrl = new URL(local)
     const connections = parseInt(config.connections, 10)
-    const options = { ...config, remote, local, connections }
+    const options = { ...config, proxyUrl, localUrl, connections }
     createClient(options, (err, client) => {
       if (err != null) throw err
     })
