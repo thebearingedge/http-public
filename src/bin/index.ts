@@ -36,9 +36,13 @@ program
     const proxyUrl = new URL(proxy)
     const localUrl = new URL(local)
     const connections = parseInt(config.connections, 10)
+    if (Number.isNaN(connections)) {
+      throw new Error('invalid argument for --connections')
+    }
     const options = { ...config, proxyUrl, localUrl, connections }
     createClient(options, (err, client) => {
       if (err != null) throw err
+      client!.connect()
     })
   })
 

@@ -154,7 +154,7 @@ export const createServer = (options: ServerOptions): HttpServer => {
       `)
       return
     }
-    agent.createConnection(null, (err, _tunnel) => {
+    agent.createConnection(null, (err, tunnel) => {
       if (err != null) {
         socket.end(head`
           HTTP/1.1 404 Not Found
@@ -162,15 +162,14 @@ export const createServer = (options: ServerOptions): HttpServer => {
         `)
         return
       }
-      const tunnel = _tunnel as Socket
       if (!socket.writable || !socket.readable) {
-        tunnel.destroy()
         socket.destroy()
+        tunnel!.destroy()
         return
       }
-      pipeline([socket, tunnel, socket], noop)
+      pipeline([socket, tunnel!, socket], noop)
       const reqHead = getRequestHead(req)
-      tunnel.write(reqHead)
+      tunnel!.write(reqHead)
     })
   }
 

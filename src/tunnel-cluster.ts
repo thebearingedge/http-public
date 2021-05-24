@@ -32,7 +32,7 @@ export class Client extends EventEmitter {
     this.tunnels = new Set()
   }
 
-  connect(): void {
+  private open(): void {
 
     const { proxyUrl, token, subdomain } = this.options
 
@@ -75,6 +75,11 @@ export class Client extends EventEmitter {
       })
     })
 
+  }
+
+  connect(): void {
+    let { connections } = this.options
+    while (connections-- > 0) this.open()
   }
 
 }
