@@ -43,6 +43,7 @@ program
     createClient(options, (err, client) => {
       if (err != null) throw err
       client!.connect()
+      client!.on('error', console.error)
     })
   })
 
@@ -52,7 +53,7 @@ program
   .description('start a public tunnel server')
   .requiredOption('-t, --token <token>', 'access token required for clients')
   .option('-h, --host <host>', 'hostname of the server', 'localhost')
-  .option('-a, --address <address>', 'ip address to listen on', '0.0.0.0')
+  .option('-a, --address <address>', 'ip address to listen on', '127.0.0.1')
   .option('-p, --port <port>', 'port number to listen on', '1111')
   .action(({ token, address, host, port }) => {
     createServer({ host, token }).listen(port, address, () => {

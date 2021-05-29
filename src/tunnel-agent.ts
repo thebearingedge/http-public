@@ -68,7 +68,9 @@ export class TunnelAgent extends Agent {
       socket.destroy()
       this.tunnels = this.tunnels.filter(tunnel => tunnel !== socket)
       this.tunnelQueue = this.tunnelQueue.filter(tunnel => tunnel !== socket)
-      if (!this.closed && this.tunnels.length === 0) {
+      if (!this.closed &&
+          this.tunnels.length === 0 &&
+          isUndefined(this.idleTimeout)) {
         this.idleTimeout = setTimeout(this.onIdleTimeout, IDLE_TIMEOUT).unref()
       }
     }

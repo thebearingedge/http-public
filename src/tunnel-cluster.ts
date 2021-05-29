@@ -40,40 +40,42 @@ export class Client extends EventEmitter {
       ? httpRequest
       : httpsRequest
 
-    const tunnelReq = request(proxyUrl, {
+    const tunnelReqOptions = {
       headers: {
         connection: 'upgrade',
         upgrade: '@http-public/tunnel',
         'x-tunnel-token': token,
         'x-tunnel-host': `${subdomain}.${proxyUrl.hostname}`
       }
-    })
+    }
 
-    tunnelReq.on('upgrade', (_, tunnelSocket) => {
+    const tunnelReq = request(proxyUrl, tunnelReqOptions)
 
-      tunnelSocket.pause()
+    tunnelReq.on('upgrade', (_, remote) => {
+
+      remote.pause()
 
       const { localUrl } = this.options
       const port = getPortNumber(localUrl)
       const { hostname: host } = localUrl
-      const localSocket = localUrl.protocol === 'http:'
+      const local = localUrl.protocol === 'http:'
         ? netConnect({ host, port })
         : tlsConnect({ host, port, rejectUnauthorized: false })
 
-      localSocket.on('connect', () => {
-        const { tunnels } = this
-        const stream = pipeline(tunnelSocket, localSocket, tunnelSocket, err => {
-          if (err != null) {
-            tunnels.delete(stream)
-            localSocket.destroy()
-            tunnelSocket.destroy()
-            this.emit('error', err)
-          }
+      local.on('connect', () => {
+        const stream = pipeline(remote, local, remote, err => {
+          if (err != null) this.emit('error', err)
+          this.tunnels.delete(stream)
+          local.destroy()
+          remote.destroy()
+          this.open()
         })
-        tunnels.add(stream)
+        this.tunnels.add(stream)
         stream.write(CLIENT_ACK)
       })
     })
+
+    tunnelReq.end()
 
   }
 

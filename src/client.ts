@@ -37,14 +37,13 @@ export const createClient = (options: ClientOptions, callback: OnCreate): void =
     : httpsRequest
 
   const clientReqOptions = {
-    url: proxyUrl,
     headers: {
       'x-tunnel-token': token,
       'x-tunnel-host': `${subdomain}.${proxyUrl.hostname}`
     }
   }
 
-  const clientReq = request(clientReqOptions)
+  const clientReq = request(proxyUrl, clientReqOptions)
 
   clientReq.on('error', done)
 
