@@ -30,7 +30,6 @@ program
   })
   .requiredOption('-t, --token <token>', 'access token for the tunnel server')
   .requiredOption('-d, --subdomain <name>', 'subdomain for the tunnel')
-  .option('-l, --log', 'log requests arriving through the tunnel', false)
   .option('-c, --connections <count>', 'number of connections to open', '10')
   .action((proxy, local, config) => {
     const proxyUrl = new URL(proxy)
@@ -40,13 +39,13 @@ program
       throw new Error('invalid argument for --connections')
     }
     const options = { ...config, proxyUrl, localUrl, connections }
-    createClient(options, (err, cluster) => {
+    createClient(options, (err, client) => {
       if (err != null) throw err
-      cluster?.connect()
-      cluster?.on('error', console.error)
-      cluster?.once('connect', url => {
+      client?.connect()
+      client?.on('error', console.error)
+      client?.once('online', publicUrl => {
         // eslint-disable-next-line no-console
-        console.log(`http-public proxy listening at ${url}`)
+        console.log(`http-public proxy listening at ${publicUrl}`)
       })
     })
   })

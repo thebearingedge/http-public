@@ -1,12 +1,13 @@
+import { pipeline } from 'stream'
 import { randomBytes } from 'crypto'
-import { pipeline, Readable } from 'stream'
 import { connect, AddressInfo, Socket } from 'net'
 import { request, Server as HttpServer } from 'http'
+import WebSocket from 'ws'
 import { expect } from 'chai'
 import { useFakeTimers, SinonFakeTimers } from 'sinon'
-import WebSocket, { Server as WebSocketServer } from 'ws'
-import { createServer } from './server'
 import { noop, CLIENT_ACK, IDLE_TIMEOUT } from './util'
+import { createLocalServer } from './util.test'
+import { createServer } from './server'
 
 describe('server', () => {
 
@@ -18,37 +19,19 @@ describe('server', () => {
   let localPort: number
   let localServer: HttpServer
   let localSocket: Socket
-  let localWebSocketServer: WebSocketServer
 
   beforeEach('start servers', done => {
     proxyServer = createServer({ host, token }).listen(0, host, () => {
-      ;({ port: proxyPort } = proxyServer.address() as AddressInfo)
-      localServer = new HttpServer((req, res) => {
-        if (req.url === '/broken') {
-          req.destroy()
-          return
-        }
-        if (req.url === '/streaming') {
-          const data = Readable.from(async function * () {
-            while (true) yield 'data'
-          }())
-          data.pipe(res)
-          return
-        }
-        res.end()
-      })
-      localWebSocketServer = new WebSocketServer({ server: localServer })
-      localWebSocketServer.on('connection', ws => ws.send('success!'))
-      localServer.listen(0, host, () => {
+      ({ port: proxyPort } = proxyServer.address() as AddressInfo)
+      localServer = createLocalServer().listen(0, host, () => {
         ({ port: localPort } = localServer.address() as AddressInfo)
-        localSocket = connect(localPort)
-        localSocket.once('connect', done)
+        localSocket = connect(localPort).once('connect', done)
       })
     })
   })
 
   afterEach('stop servers', done => {
-    localSocket.destroy()
+    localSocket.end()
     localServer.close(() => proxyServer.close(done))
   })
 

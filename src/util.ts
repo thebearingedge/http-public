@@ -33,14 +33,13 @@ export const isString = (value: unknown): value is string => {
   return typeof value === 'string'
 }
 
-export const once = <A extends any[], R>(fn: (...a: A) => R): (...a: A) => R => {
+export const once = <A extends any[], R>(f: (...a: A) => R): (...a: A) => R => {
   let called = false
   let result: R
   return (...args: A): R => {
     if (called) return result
     called = true
-    result = fn(...args)
-    return result
+    return (result = f(...args))
   }
 }
 
@@ -56,6 +55,8 @@ export const head = ([text]: TemplateStringsArray): string => {
 export const noop = (..._args: any[]): void => {}
 
 export const CRLF = '\r\n'
+
+export const CONNECTIONS = 10
 
 export const CLIENT_ACK = '\x00'
 

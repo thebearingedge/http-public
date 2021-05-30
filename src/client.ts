@@ -1,15 +1,14 @@
 import { request as httpRequest, STATUS_CODES } from 'http'
 import { request as httpsRequest } from 'https'
 import { TunnelCluster } from './tunnel-cluster'
-import { once } from './util'
+import { CONNECTIONS, once } from './util'
 
 type ClientOptions = {
   proxyUrl: URL
   localUrl: URL
   token: string
   subdomain: string
-  connections: number
-  log: boolean
+  connections?: number
 }
 
 type OnCreate = {
@@ -20,7 +19,9 @@ export const createClient = (options: ClientOptions, callback: OnCreate): void =
 
   const done = once(callback)
 
-  const { proxyUrl, localUrl, token, subdomain, connections } = options
+  const {
+    proxyUrl, localUrl, token, subdomain, connections = CONNECTIONS
+  } = options
 
   const { protocol: localProtocol } = localUrl
   const { protocol: proxyProtocol } = proxyUrl
