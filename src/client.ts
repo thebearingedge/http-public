@@ -1,7 +1,8 @@
 import { request as httpRequest, STATUS_CODES } from 'http'
 import { request as httpsRequest } from 'https'
 import { TunnelCluster } from './tunnel-cluster'
-import { CONNECTIONS, once } from './util'
+import { CONNECTIONS } from './constants'
+import { once } from './util'
 
 type ClientOptions = {
   proxyUrl: URL

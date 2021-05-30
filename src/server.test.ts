@@ -5,9 +5,10 @@ import { request, Server as HttpServer } from 'http'
 import WebSocket from 'ws'
 import { expect } from 'chai'
 import { useFakeTimers, SinonFakeTimers } from 'sinon'
-import { noop, CLIENT_ACK, IDLE_TIMEOUT } from './util'
+import { CLIENT_ACK, IDLE_TIMEOUT } from './constants'
 import { createLocalServer } from './util.test'
 import { createServer } from './server'
+import { noop } from './util'
 
 describe('server', () => {
 
@@ -273,7 +274,7 @@ describe('server', () => {
             }
             const tunnelReq = request(tunnelReqOptions)
             tunnelReq.once('upgrade', (_, tunnel) => {
-              const stream = pipeline([tunnel, localSocket, tunnel], noop)
+              const stream = pipeline(tunnel, localSocket, tunnel, noop)
               stream.write(CLIENT_ACK)
             })
             tunnelReq.end()
@@ -307,9 +308,9 @@ describe('server', () => {
                 }
               }
               const tunnelReq = request(tunnelReqOptions)
-              tunnelReq.once('upgrade', (_, tunnel) => {
-                const stream = pipeline([tunnel, localSocket, tunnel], noop)
-                stream.write(CLIENT_ACK, done)
+              tunnelReq.once('upgrade', (_, proxy) => {
+                const tunnel = pipeline(proxy, localSocket, proxy, noop)
+                tunnel.write(CLIENT_ACK, done)
               })
               tunnelReq.end()
             })
@@ -621,9 +622,9 @@ describe('server', () => {
             }
           }
           const tunnelReq = request(tunnelReqOptions)
-          tunnelReq.once('upgrade', (_, tunnel) => {
-            const stream = pipeline([tunnel, localSocket, tunnel], noop)
-            stream.write(CLIENT_ACK)
+          tunnelReq.once('upgrade', (_, proxy) => {
+            const tunnel = pipeline(proxy, localSocket, proxy, noop)
+            tunnel.write(CLIENT_ACK)
           })
           tunnelReq.end()
         })
@@ -721,10 +722,9 @@ describe('server', () => {
                 }
               }
               const tunnelReq = request(tunnelReqOptions)
-              tunnelReq.once('upgrade', (_, _tunnel) => {
-                tunnel = _tunnel
-                const stream = pipeline([tunnel, localSocket, tunnel], noop)
-                stream.write(CLIENT_ACK, done)
+              tunnelReq.once('upgrade', (_, proxy) => {
+                tunnel = pipeline(proxy, localSocket, proxy, noop)
+                tunnel.write(CLIENT_ACK, done)
               })
               tunnelReq.end()
             })

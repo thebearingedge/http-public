@@ -4,7 +4,8 @@ import { Socket, connect as netConnect } from 'net'
 import { TLSSocket, connect as tlsConnect } from 'tls'
 import { request as httpRequest } from 'http'
 import { request as httpsRequest } from 'https'
-import { CLIENT_ACK, getPortNumber } from './util'
+import { CLIENT_ACK } from './constants'
+import { getPortNumber } from './util'
 
 export interface TunnelCluster extends EventEmitter {
   emit(event: 'error', err: Error): boolean

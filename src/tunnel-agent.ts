@@ -1,7 +1,8 @@
 import { Socket } from 'net'
 import EventEmitter from 'events'
 import { Agent, AgentOptions } from 'http'
-import { isUndefined, CLIENT_ACK, IDLE_TIMEOUT } from './util'
+import { CLIENT_ACK, IDLE_TIMEOUT } from './constants'
+import { isUndefined } from './util'
 
 export type OnConnection = {
   (err: Error | null, socket?: Socket): void
@@ -18,7 +19,7 @@ export interface TunnelAgent extends Agent, EventEmitter {
 
 export class TunnelAgent extends Agent {
 
-  private closed: boolean
+  private destroyed: boolean
   private tunnels: Socket[]
   private tunnelQueue: Socket[]
   private requestQueue: OnConnection[]
@@ -26,7 +27,7 @@ export class TunnelAgent extends Agent {
 
   constructor(options: TunnelAgentOptions = {}) {
     super({ ...options, keepAlive: true, maxFreeSockets: 1 })
-    this.closed = false
+    this.destroyed = false
     this.tunnels = []
     this.tunnelQueue = []
     this.requestQueue = []
@@ -68,7 +69,7 @@ export class TunnelAgent extends Agent {
       socket.destroy()
       this.tunnels = this.tunnels.filter(tunnel => tunnel !== socket)
       this.tunnelQueue = this.tunnelQueue.filter(tunnel => tunnel !== socket)
-      if (!this.closed &&
+      if (!this.destroyed &&
           this.tunnels.length === 0 &&
           isUndefined(this.idleTimeout)) {
         this.idleTimeout = setTimeout(this.onIdleTimeout, IDLE_TIMEOUT).unref()
@@ -99,10 +100,10 @@ export class TunnelAgent extends Agent {
     this.tunnels.push(socket)
   }
 
-  destroy = (): void => {
-    this.closed = true
+  destroy(): void {
+    this.destroyed = true
     this.clearIdleTimeout()
-    this.tunnels.forEach(socket => socket.destroy())
+    this.tunnels.forEach(tunnel => tunnel.destroy())
     this.requestQueue.forEach(onConnection => {
       onConnection(new Error('agent closed'))
     })

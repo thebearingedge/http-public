@@ -96,13 +96,13 @@ export const createServer = (options: ServerOptions): HttpServer => {
     } as unknown as RequestOptions
     const tunnelReq = request(tunnelReqOptions, tunnelRes => {
       res.writeHead(tunnelRes.statusCode!, tunnelRes.rawHeaders)
-      pipeline([tunnelRes, res], noop)
+      pipeline(tunnelRes, res, noop)
     })
     tunnelReq.once('error', () => {
       res.writeHead(502).end()
       tunnelReq.destroy()
     })
-    pipeline([req, tunnelReq], noop)
+    pipeline(req, tunnelReq, noop)
   }
 
   function onClientUpgrade(req: Req, socket: Socket): void {
@@ -167,7 +167,7 @@ export const createServer = (options: ServerOptions): HttpServer => {
         tunnel!.destroy()
         return
       }
-      pipeline([socket, tunnel!, socket], noop)
+      pipeline(socket, tunnel!, socket, noop)
       const reqHead = getRequestHead(req)
       tunnel!.write(reqHead)
     })

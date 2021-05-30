@@ -1,4 +1,5 @@
 import { IncomingMessage as Req } from 'http'
+import { CRLF } from './constants'
 
 export type WebProtocol = 'http:' | 'https:'
 
@@ -53,11 +54,3 @@ export const head = ([text]: TemplateStringsArray): string => {
 }
 
 export const noop = (..._args: any[]): void => {}
-
-export const CRLF = '\r\n'
-
-export const CONNECTIONS = 10
-
-export const CLIENT_ACK = '\x00'
-
-export const IDLE_TIMEOUT = 10000

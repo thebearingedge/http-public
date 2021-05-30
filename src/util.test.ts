@@ -23,8 +23,11 @@ export const createLocalServer = (): HttpServer => {
   const localWebSocketServer = new WebSocketServer({ server: localServer })
   localWebSocketServer.on('connection', ws => ws.send('success!'))
   const closeServer = localServer.close
-  localServer.close = (callback?: ((err?: Error) => void)) => {
-    connections.forEach(socket => socket.end())
+  localServer.close = (callback?: (err?: Error) => void) => {
+    connections.forEach(socket => {
+      connections.delete(socket)
+      socket.destroy()
+    })
     return closeServer.call(localServer, callback)
   }
   return localServer
