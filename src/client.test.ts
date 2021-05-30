@@ -3,10 +3,10 @@ import { randomBytes } from 'crypto'
 import { Server as HttpServer } from 'http'
 import mitm from 'mitm'
 import { expect } from 'chai'
+import { CONNECTIONS } from './constants'
 import { createServer } from './server'
 import { createClient } from './client'
-import { noop, isUndefined } from './util'
-import { CONNECTIONS } from './constants'
+import { isUndefined, noop } from './util'
 import { createLocalServer } from './util.test'
 import { TunnelCluster } from './tunnel-cluster'
 
@@ -78,7 +78,7 @@ describe('client', () => {
       spy.on('request', (_, res) => res.writeHead(201).end())
       const proxyUrl = new URL(`http://${host}:${localPort}`)
       const localUrl = new URL(`http://${host}:${proxyPort}`)
-      createClient({ token, subdomain, proxyUrl, localUrl }, (err, client) => {
+      createClient({ token, subdomain, proxyUrl, localUrl }, (err, _, client) => {
         expect(err).to.equal(null)
         expect(client).to.be.an.instanceOf(TunnelCluster)
         done()
@@ -89,9 +89,22 @@ describe('client', () => {
       spy.on('request', (_, res) => res.writeHead(201).end())
       const proxyUrl = new URL(`https://${host}:${proxyPort}`)
       const localUrl = new URL(`https://${host}:${localPort}`)
-      createClient({ token, subdomain, proxyUrl, localUrl }, (err, client) => {
+      createClient({ token, subdomain, proxyUrl, localUrl }, (err, _, client) => {
         expect(err).to.equal(null)
         expect(client).to.be.an.instanceOf(TunnelCluster)
+        done()
+      })
+    })
+
+    it('emits the public url', done => {
+      spy.on('request', (_, res) => res.writeHead(201).end())
+      const proxyUrl = new URL(`http://${host}:${proxyPort}`)
+      const localUrl = new URL(`http://${host}:${localPort}`)
+      const options = { token, subdomain, proxyUrl, localUrl }
+      createClient(options, (err, publicUrl) => {
+        expect(err).to.equal(null)
+        const href = `http://${subdomain}.${host}:${proxyPort}/`
+        expect(publicUrl?.href).to.equal(href)
         done()
       })
     })
@@ -100,112 +113,153 @@ describe('client', () => {
 
   describe('connection', () => {
 
-    it('opens 10 connections', done => {
-      let openSockets = 0
-      const totalSockets = 20
+    it(`opens ${CONNECTIONS} connections by default`, done => {
+      let opened = 0
+      const total = CONNECTIONS * 2
       localServer.on('connection', () => {
-        if (++openSockets < totalSockets) return
+        if (++opened < total) return
+        client.destroy()
         done()
       })
       const proxyUrl = new URL(`http://${host}:${proxyPort}`)
       const localUrl = new URL(`http://${host}:${localPort}`)
       const options = { token, subdomain, proxyUrl, localUrl }
-      createClient(options, (err, _client) => {
+      createClient(options, (err, _, cluster) => {
         expect(err).to.equal(null)
-        client = _client!
-        client.connect()
+        client = cluster!
+        client.on('error', noop)
         client.on('connection', () => {
-          if (++openSockets < totalSockets) return
+          if (++opened < total) return
+          client.destroy()
           done()
         })
+        client.connect()
       })
     })
 
     it('opens a configurable number of connections', done => {
-      let openSockets = 0
-      const totalSockets = CONNECTIONS * 2
+      let opened = 0
+      const connections = 5
+      const total = connections * 2
       localServer.on('connection', () => {
-        if (++openSockets < totalSockets) return
+        if (++opened < total) return
+        client.destroy()
         done()
       })
       const proxyUrl = new URL(`http://${host}:${proxyPort}`)
       const localUrl = new URL(`http://${host}:${localPort}`)
-      const connections = totalSockets / 2
       const options = { token, subdomain, proxyUrl, localUrl, connections }
-      createClient(options, (err, _client) => {
+      createClient(options, (err, _, cluster) => {
         expect(err).to.equal(null)
-        client = _client!
-        client.connect()
+        client = cluster!
+        client.on('error', noop)
         client.on('connection', () => {
-          if (++openSockets < totalSockets) return
+          if (++opened < total) return
+          client.destroy()
           done()
         })
+        client.connect()
       })
     })
 
-    it('emits the public url when connections are opened', done => {
+    it('emits an errors on broken tunnels', done => {
       const proxyUrl = new URL(`http://${host}:${proxyPort}`)
       const localUrl = new URL(`http://${host}:${localPort}`)
       const options = { token, subdomain, proxyUrl, localUrl, connections: 1 }
-      createClient(options, (err, _client) => {
+      createClient(options, (err, _, _client) => {
         expect(err).to.equal(null)
         client = _client!
-        client.connect()
-        client.on('online', publicUrl => {
-          expect(publicUrl.href).to.equal(`http://${subdomain}.${host}:${proxyPort}/`)
+        client.on('error', err => {
+          expect(err).to.have.property('message', 'oops')
+          client.destroy()
           done()
         })
+        client.once('connection', socket => {
+          socket.destroy(new Error('oops'))
+        })
+        client.connect()
       })
     })
 
     it('reopens closed connections', done => {
-      let reconnects = 0
+      let opened = 0
+      const connections = 1
+      const total = connections * 4
       localServer.on('connection', socket => {
-        if (reconnects++ !== 1) return socket.destroy()
+        if (++opened < total) return socket.destroy()
         done()
       })
       const proxyUrl = new URL(`http://${host}:${proxyPort}`)
       const localUrl = new URL(`http://${host}:${localPort}`)
-      const options = { token, subdomain, proxyUrl, localUrl, connections: 1 }
-      createClient(options, (err, _client) => {
+      const options = { token, subdomain, proxyUrl, localUrl, connections }
+      createClient(options, (err, _, _client) => {
         expect(err).to.equal(null)
         client = _client!
+        client.on('error', noop)
+        client.on('connection', () => {
+          if (++opened < total) return
+          done()
+        })
         client.connect()
       })
     })
 
-    it('defaults to port 80 for http', done => {
+    it('defaults to port 80 for local http', done => {
+      let opened = 0
+      const connections = 1
+      const total = connections * 2
+      const ports = new Set()
       const proxyUrl = new URL(`http://${host}:${proxyPort}`)
       const localUrl = new URL(`http://${host}`)
-      const options = { token, subdomain, proxyUrl, localUrl, connections: 1 }
+      const options = { token, subdomain, proxyUrl, localUrl, connections }
       spy = mitm()
-      spy.on('connect', (socket, options) => {
-        if (options.port === proxyPort) return socket.bypass()
-        expect(options.port).to.equal(80)
+      spy.on('connect', (socket, { port }) => {
+        ports.add(port)
+        if (port === proxyPort) return socket.bypass()
+        if (++opened < total) return
+        expect([...ports]).to.include(80)
         done()
       })
-      createClient(options, (err, _client) => {
+      createClient(options, (err, _, _client) => {
         expect(err).to.equal(null)
         client = _client!
         client.on('error', noop)
+        client.on('connection', socket => {
+          ports.add(socket.remoteAddress)
+          if (++opened < total) return
+          expect([...ports]).to.include(80)
+          done()
+        })
         client.connect()
       })
     })
 
-    it('defaults to port 443 for https', done => {
+    it('defaults to local port 443 for local https', done => {
+      let opened = 0
+      const connections = 1
+      const total = connections * 2
+      const ports = new Set()
       const proxyUrl = new URL(`http://${host}:${proxyPort}`)
       const localUrl = new URL(`https://${host}`)
-      const options = { token, subdomain, proxyUrl, localUrl, connections: 1 }
+      const options = { token, subdomain, proxyUrl, localUrl, connections }
       spy = mitm()
-      spy.on('connect', (socket, options) => {
-        if (options.port === proxyPort) return socket.bypass()
-        expect(options.port).to.equal(443)
+      spy.on('connect', (socket, { port }) => {
+        ports.add(port)
+        if (port === proxyPort) return socket.bypass()
+        if (++opened < total) return
+        expect([...ports]).to.include(443)
         done()
       })
-      createClient(options, (err, _client) => {
+      createClient(options, (err, _, _client) => {
         expect(err).to.equal(null)
         client = _client!
         client.on('error', noop)
+        client.on('connection', socket => {
+          ports.add(socket.remotePort)
+          if (++opened < total) return
+          expect([...ports]).to.include(443)
+          done()
+        })
         client.connect()
       })
     })

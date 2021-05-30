@@ -9,18 +9,18 @@ import { getPortNumber } from './util'
 
 export interface TunnelCluster extends EventEmitter {
   emit(event: 'error', err: Error): boolean
-  emit(event: 'online', url: URL): boolean
   emit(event: 'connection', socket: Socket): boolean
   on(event: 'error', onError: (err: Error) => void): this
-  on(event: 'online', onConnect: (url: URL) => void): this
   on(event: 'connection', onConnection: (socket: Socket) => void): this
+  once(event: 'error', onError: (err: Error) => void): this
+  once(event: 'connection', onConnection: (socket: Socket) => void): this
 }
 
 type TunnelClusterOptions = {
   proxyUrl: URL
   localUrl: URL
   token: string
-  subdomain: string
+  domain: string
   connections: number
 }
 
@@ -39,8 +39,7 @@ export class TunnelCluster extends EventEmitter {
 
   private open(): void {
 
-    const { proxyUrl, token, subdomain } = this.options
-    const domain = `${subdomain}.${proxyUrl.hostname}`
+    const { proxyUrl, token, domain } = this.options
 
     const request = proxyUrl.protocol === 'http:'
       ? httpRequest
@@ -57,31 +56,37 @@ export class TunnelCluster extends EventEmitter {
 
     const tunnelReq = request(proxyUrl, tunnelReqOptions)
 
+    const onError = (err: Error): boolean => this.emit('error', err)
+
     tunnelReq.on('upgrade', (_, proxy) => {
+
       proxy.pause()
-      const { localUrl, connections } = this.options
+      tunnelReq.off('error', onError)
+
+      const { localUrl } = this.options
       const { hostname: host } = localUrl
       const port = getPortNumber(localUrl)
       const local = localUrl.protocol === 'http:'
         ? netConnect({ host, port })
         : tlsConnect({ host, port, rejectUnauthorized: false })
+
       local.on('connect', () => {
+        local.off('error', onError)
         const tunnel = pipeline(proxy, local, proxy, err => {
           this.tunnels.delete(tunnel)
-          if (err != null) this.emit('error', err)
-          if (!this.destroyed) this.open()
+          if (err != null) onError(err)
+          if (this.destroyed) return
+          this.open()
         })
         this.tunnels.add(tunnel)
         tunnel.write(CLIENT_ACK)
         this.emit('connection', tunnel)
-        if (this.tunnels.size === connections) {
-          const publicUrl = new URL(proxyUrl.href)
-          publicUrl.hostname = domain
-          this.emit('online', publicUrl)
-        }
       })
+
+      local.on('error', onError)
     })
 
+    tunnelReq.on('error', onError)
     tunnelReq.end()
 
   }
@@ -94,7 +99,7 @@ export class TunnelCluster extends EventEmitter {
   destroy(): void {
     this.destroyed = true
     this.tunnels.forEach(tunnel => {
-      tunnel.end()
+      tunnel.destroy()
       this.tunnels.delete(tunnel)
     })
   }

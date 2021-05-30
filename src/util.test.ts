@@ -4,8 +4,16 @@ import { Server as HttpServer } from 'http'
 import { Server as WebSocketServer } from 'ws'
 
 export const createLocalServer = (): HttpServer => {
+
+  const server = new HttpServer()
   const connections: Set<Socket> = new Set()
-  const localServer = new HttpServer((req, res) => {
+
+  server.on('connection', socket => {
+    socket.once('close', () => connections.delete(socket))
+    connections.add(socket)
+  })
+
+  server.on('request', (req, res) => {
     if (req.url === '/broken') {
       req.destroy()
       return
@@ -19,16 +27,20 @@ export const createLocalServer = (): HttpServer => {
     }
     res.end()
   })
-  localServer.on('connection', socket => connections.add(socket))
-  const localWebSocketServer = new WebSocketServer({ server: localServer })
-  localWebSocketServer.on('connection', ws => ws.send('success!'))
-  const closeServer = localServer.close
-  localServer.close = (callback?: (err?: Error) => void) => {
+
+  new WebSocketServer({ server }).on('connection', ws => {
+    ws.send('success!')
+  })
+
+  const closeServer = server.close
+
+  server.close = (callback?: (err?: Error) => void) => {
     connections.forEach(socket => {
       connections.delete(socket)
       socket.destroy()
     })
-    return closeServer.call(localServer, callback)
+    return closeServer.call(server, callback)
   }
-  return localServer
+
+  return server
 }

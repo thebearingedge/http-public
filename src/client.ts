@@ -2,7 +2,6 @@ import { request as httpRequest, STATUS_CODES } from 'http'
 import { request as httpsRequest } from 'https'
 import { TunnelCluster } from './tunnel-cluster'
 import { CONNECTIONS } from './constants'
-import { once } from './util'
 
 type ClientOptions = {
   proxyUrl: URL
@@ -13,12 +12,10 @@ type ClientOptions = {
 }
 
 type OnCreate = {
-  (err: Error | null, client?: TunnelCluster): void
+  (err: Error | null, url?: URL, client?: TunnelCluster): void
 }
 
 export const createClient = (options: ClientOptions, callback: OnCreate): void => {
-
-  const done = once(callback)
 
   const {
     proxyUrl, localUrl, token, subdomain, connections = CONNECTIONS
@@ -30,41 +27,51 @@ export const createClient = (options: ClientOptions, callback: OnCreate): void =
   if ((localProtocol !== 'http:' && localProtocol !== 'https:') ||
       (proxyProtocol !== 'http:' && proxyProtocol !== 'https:')) {
     const err = new Error('url protocols must be "http:" or "https:"')
-    setImmediate(done, err)
+    setImmediate(callback, err)
     return
+  }
+
+  const domain = `${subdomain}.${proxyUrl.hostname}`
+
+  const clientReqOptions = {
+    headers: {
+      'x-tunnel-token': token,
+      'x-tunnel-host': domain
+    }
   }
 
   const request = proxyProtocol === 'http:'
     ? httpRequest
     : httpsRequest
 
-  const clientReqOptions = {
-    headers: {
-      'x-tunnel-token': token,
-      'x-tunnel-host': `${subdomain}.${proxyUrl.hostname}`
-    }
-  }
-
   const clientReq = request(proxyUrl, clientReqOptions, res => {
+
     if (res.statusCode !== 201) {
       const statusText = STATUS_CODES[res.statusCode!]
       const err = new Error(
         `proxy server responded with status "${res.statusCode} ${statusText}"`
       )
-      done(err)
+      callback(err)
       return
     }
+
+    res.resume()
+
+    const publicUrl = Object.assign(new URL(proxyUrl.href), {
+      hostname: domain
+    })
     const client = new TunnelCluster({
       proxyUrl,
       localUrl,
       token,
-      subdomain,
+      domain,
       connections
     })
-    done(null, client)
+
+    res.on('end', () => callback(null, publicUrl, client))
   })
 
-  clientReq.on('error', done)
+  clientReq.once('error', callback)
   clientReq.end()
 
 }

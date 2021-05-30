@@ -19,20 +19,19 @@ describe('server', () => {
   let proxyServer: HttpServer
   let localPort: number
   let localServer: HttpServer
-  let localSocket: Socket
+  let local: Socket
 
   beforeEach('start servers', done => {
     proxyServer = createServer({ host, token }).listen(0, host, () => {
       ({ port: proxyPort } = proxyServer.address() as AddressInfo)
       localServer = createLocalServer().listen(0, host, () => {
         ({ port: localPort } = localServer.address() as AddressInfo)
-        localSocket = connect(localPort).once('connect', done)
+        local = connect(localPort).once('connect', done)
       })
     })
   })
 
   afterEach('stop servers', done => {
-    localSocket.end()
     localServer.close(() => proxyServer.close(done))
   })
 
@@ -273,9 +272,9 @@ describe('server', () => {
               }
             }
             const tunnelReq = request(tunnelReqOptions)
-            tunnelReq.once('upgrade', (_, tunnel) => {
-              const stream = pipeline(tunnel, localSocket, tunnel, noop)
-              stream.write(CLIENT_ACK)
+            tunnelReq.once('upgrade', (_, proxy) => {
+              const tunnel = pipeline(proxy, local, proxy, noop)
+              tunnel.write(CLIENT_ACK)
             })
             tunnelReq.end()
           })
@@ -309,7 +308,7 @@ describe('server', () => {
               }
               const tunnelReq = request(tunnelReqOptions)
               tunnelReq.once('upgrade', (_, proxy) => {
-                const tunnel = pipeline(proxy, localSocket, proxy, noop)
+                const tunnel = pipeline(proxy, local, proxy, noop)
                 tunnel.write(CLIENT_ACK, done)
               })
               tunnelReq.end()
@@ -359,7 +358,7 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 200)
-            res.once('data', () => localSocket.destroy())
+            res.once('data', () => local.destroy())
             res.once('close', done)
           })
           req.end()
@@ -623,7 +622,7 @@ describe('server', () => {
           }
           const tunnelReq = request(tunnelReqOptions)
           tunnelReq.once('upgrade', (_, proxy) => {
-            const tunnel = pipeline(proxy, localSocket, proxy, noop)
+            const tunnel = pipeline(proxy, local, proxy, noop)
             tunnel.write(CLIENT_ACK)
           })
           tunnelReq.end()
@@ -723,7 +722,7 @@ describe('server', () => {
               }
               const tunnelReq = request(tunnelReqOptions)
               tunnelReq.once('upgrade', (_, proxy) => {
-                tunnel = pipeline(proxy, localSocket, proxy, noop)
+                tunnel = pipeline(proxy, local, proxy, noop)
                 tunnel.write(CLIENT_ACK, done)
               })
               tunnelReq.end()
