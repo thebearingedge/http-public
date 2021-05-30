@@ -1,6 +1,6 @@
 import { request as httpRequest, STATUS_CODES } from 'http'
 import { request as httpsRequest } from 'https'
-import { Client } from './tunnel-cluster'
+import { TunnelCluster } from './tunnel-cluster'
 import { once } from './util'
 
 type ClientOptions = {
@@ -13,7 +13,7 @@ type ClientOptions = {
 }
 
 type OnCreate = {
-  (err: Error | null, client?: Client): void
+  (err: Error | null, client?: TunnelCluster): void
 }
 
 export const createClient = (options: ClientOptions, callback: OnCreate): void => {
@@ -43,11 +43,7 @@ export const createClient = (options: ClientOptions, callback: OnCreate): void =
     }
   }
 
-  const clientReq = request(proxyUrl, clientReqOptions)
-
-  clientReq.on('error', done)
-
-  clientReq.on('response', res => {
+  const clientReq = request(proxyUrl, clientReqOptions, res => {
     if (res.statusCode !== 201) {
       const statusText = STATUS_CODES[res.statusCode!]
       const err = new Error(
@@ -56,7 +52,7 @@ export const createClient = (options: ClientOptions, callback: OnCreate): void =
       done(err)
       return
     }
-    const client = new Client({
+    const client = new TunnelCluster({
       proxyUrl,
       localUrl,
       token,
@@ -66,6 +62,7 @@ export const createClient = (options: ClientOptions, callback: OnCreate): void =
     done(null, client)
   })
 
+  clientReq.on('error', done)
   clientReq.end()
 
 }

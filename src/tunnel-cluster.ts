@@ -7,10 +7,10 @@ import { request as httpsRequest } from 'https'
 import { CLIENT_ACK, getPortNumber } from './util'
 
 export interface TunnelCluster extends EventEmitter {
-  emit(event: 'request'): boolean
   emit(event: 'error', err: Error): boolean
-  on(event: 'request', onRequest: (info: string) => void): this
+  emit(event: 'connect', url: URL): boolean
   on(event: 'error', onError: (err: Error) => void): this
+  on(event: 'connect', onConnect: (url: URL) => void): this
 }
 
 type TunnelClusterOptions = {
@@ -21,7 +21,7 @@ type TunnelClusterOptions = {
   connections: number
 }
 
-export class Client extends EventEmitter {
+export class TunnelCluster extends EventEmitter {
 
   private readonly options: TunnelClusterOptions
   private readonly tunnels: Set<Stream>
@@ -35,6 +35,7 @@ export class Client extends EventEmitter {
   private open(): void {
 
     const { proxyUrl, token, subdomain } = this.options
+    const domain = `${subdomain}.${proxyUrl.hostname}`
 
     const request = proxyUrl.protocol === 'http:'
       ? httpRequest
@@ -45,33 +46,33 @@ export class Client extends EventEmitter {
         connection: 'upgrade',
         upgrade: '@http-public/tunnel',
         'x-tunnel-token': token,
-        'x-tunnel-host': `${subdomain}.${proxyUrl.hostname}`
+        'x-tunnel-host': domain
       }
     }
 
     const tunnelReq = request(proxyUrl, tunnelReqOptions)
 
-    tunnelReq.on('upgrade', (_, remote) => {
-
-      remote.pause()
-
-      const { localUrl } = this.options
-      const port = getPortNumber(localUrl)
+    tunnelReq.on('upgrade', (_, proxy) => {
+      proxy.pause()
+      const { localUrl, connections } = this.options
       const { hostname: host } = localUrl
+      const port = getPortNumber(localUrl)
       const local = localUrl.protocol === 'http:'
         ? netConnect({ host, port })
         : tlsConnect({ host, port, rejectUnauthorized: false })
-
       local.on('connect', () => {
-        const stream = pipeline(remote, local, remote, err => {
+        const tunnel = pipeline(proxy, local, proxy, err => {
           if (err != null) this.emit('error', err)
-          this.tunnels.delete(stream)
-          local.destroy()
-          remote.destroy()
+          this.tunnels.delete(tunnel)
           this.open()
         })
-        this.tunnels.add(stream)
-        stream.write(CLIENT_ACK)
+        tunnel.write(CLIENT_ACK)
+        this.tunnels.add(tunnel)
+        if (this.tunnels.size === connections) {
+          const publicUrl = new URL('', proxyUrl)
+          publicUrl.hostname = domain
+          this.emit('connect', publicUrl)
+        }
       })
     })
 

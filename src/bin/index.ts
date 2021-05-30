@@ -40,10 +40,14 @@ program
       throw new Error('invalid argument for --connections')
     }
     const options = { ...config, proxyUrl, localUrl, connections }
-    createClient(options, (err, client) => {
+    createClient(options, (err, cluster) => {
       if (err != null) throw err
-      client!.connect()
-      client!.on('error', console.error)
+      cluster?.connect()
+      cluster?.on('error', console.error)
+      cluster?.once('connect', url => {
+        // eslint-disable-next-line no-console
+        console.log(`http-public proxy listening at ${url}`)
+      })
     })
   })
 
@@ -58,7 +62,7 @@ program
   .action(({ token, address, host, port }) => {
     createServer({ host, token }).listen(port, address, () => {
       // eslint-disable-next-line no-console
-      console.log(`http-public listening at ${address}:${port} for ${host}\n`)
+      console.log(`http-public listening at ${address}:${port} for ${host}`)
     })
   })
 
