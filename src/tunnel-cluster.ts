@@ -21,6 +21,7 @@ type TunnelClusterOptions = {
   localUrl: URL
   token: string
   domain: string
+  request: typeof httpRequest | typeof httpsRequest
   connections: number
 }
 
@@ -39,11 +40,7 @@ export class TunnelCluster extends EventEmitter {
 
   private open(): void {
 
-    const { proxyUrl, token, domain } = this.options
-
-    const request = proxyUrl.protocol === 'http:'
-      ? httpRequest
-      : httpsRequest
+    const { proxyUrl, token, domain, request } = this.options
 
     const tunnelReqOptions = {
       headers: {

@@ -65,6 +65,7 @@ export const createClient = (options: ClientOptions, callback: OnCreate): void =
       localUrl,
       token,
       domain,
+      request,
       connections
     })
 
