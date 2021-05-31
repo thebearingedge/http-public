@@ -25,11 +25,11 @@ program
   .command('client <proxy> [local]', { isDefault: true })
   .alias('c')
   .description('start a local tunnel client', {
-    proxy: 'public server origin \n(example: https://tunnel.my.site)',
-    local: 'local server origin \n(default: http://localhost:3000)'
+    proxy: 'public server origin \nexample: https://tunnel.my.site',
+    local: 'local server origin \ndefault: http://localhost:3000'
   })
   .requiredOption('-t, --token <token>', 'access token for the tunnel server')
-  .requiredOption('-d, --subdomain <name>', 'subdomain for the tunnel')
+  .requiredOption('-n, --subdomain <name>', 'subdomain for the tunnel')
   .option('-c, --connections <count>', 'number of connections to open', '10')
   .action((proxy, local, config) => {
     const proxyUrl = new URL(proxy)
@@ -53,7 +53,7 @@ program
   .alias('s')
   .description('start a public tunnel server')
   .requiredOption('-t, --token <token>', 'access token required for clients')
-  .option('-h, --host <host>', 'hostname of the server', 'localhost')
+  .option('-n, --host <name>', 'hostname of the server', 'localhost')
   .option('-a, --address <address>', 'ip address to listen on', '127.0.0.1')
   .option('-p, --port <port>', 'port number to listen on', '1111')
   .action(({ token, address, host, port }) => {
