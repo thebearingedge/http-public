@@ -55,20 +55,20 @@ export const createClient = (options: ClientOptions, callback: OnCreate): void =
       return
     }
 
-    res.resume()
-
+    const key = res.headers['x-tunnel-key'] as string
     const publicUrl = Object.assign(new URL(proxyUrl.href), {
       hostname: domain
     })
     const client = new TunnelCluster({
       proxyUrl,
       localUrl,
-      token,
+      key,
       domain,
       request,
       connections
     })
 
+    res.resume()
     res.on('end', () => callback(null, publicUrl, client))
   })
 

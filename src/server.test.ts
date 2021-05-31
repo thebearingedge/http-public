@@ -233,6 +233,8 @@ describe('server', () => {
 
       context('when no tunnels are available for the hostname', () => {
 
+        let tunnelKey: string
+
         beforeEach('create a tunnel agent', done => {
           const reqOptions = {
             port: proxyPort,
@@ -243,6 +245,7 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
+            tunnelKey = res.headers['x-tunnel-key'] as string
             res.resume()
             res.once('end', done)
           })
@@ -268,7 +271,7 @@ describe('server', () => {
                 connection: 'upgrade',
                 upgrade: '@http-public/tunnel',
                 'x-tunnel-host': 'new.localhost',
-                'x-tunnel-token': token
+                'x-tunnel-key': tunnelKey
               }
             }
             const tunnelReq = request(tunnelReqOptions)
@@ -285,6 +288,8 @@ describe('server', () => {
 
       context('when a tunnel connection is available for the hostname', () => {
 
+        let tunnelKey: string
+
         beforeEach('create a tunnel agent and tunnel', done => {
           const clientReqOptions = {
             port: proxyPort,
@@ -295,6 +300,7 @@ describe('server', () => {
           }
           const clientReq = request(clientReqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
+            tunnelKey = res.headers['x-tunnel-key'] as string
             res.resume()
             res.once('end', () => {
               const tunnelReqOptions = {
@@ -303,7 +309,7 @@ describe('server', () => {
                   connection: 'upgrade',
                   upgrade: '@http-public/tunnel',
                   'x-tunnel-host': 'new.localhost',
-                  'x-tunnel-token': token
+                  'x-tunnel-key': tunnelKey
                 }
               }
               const tunnelReq = request(tunnelReqOptions)
@@ -395,39 +401,18 @@ describe('server', () => {
 
     describe('for client upgrades', () => {
 
-      context('when the x-tunnel-token header is not set', () => {
+      context('when the x-tunnel-host is not set', () => {
 
-        it('responds with a 403 error', done => {
+        it('responds with a 400 error', done => {
           const reqOptions = {
             port: proxyPort,
             headers: {
               connection: 'upgrade',
-              upgrade: 'anything'
+              upgrade: '@http-public/tunnel'
             }
           }
           const req = request(reqOptions, res => {
-            expect(res).to.have.property('statusCode', 403)
-            res.resume()
-            res.once('end', done)
-          })
-          req.end()
-        })
-
-      })
-
-      context('when the x-tunnel-token header is not correct', () => {
-
-        it('responds with a 403 error', done => {
-          const reqOptions = {
-            port: proxyPort,
-            headers: {
-              connection: 'upgrade',
-              upgrade: 'anything',
-              'x-tunnel-token': 'not the token'
-            }
-          }
-          const req = request(reqOptions, res => {
-            expect(res).to.have.property('statusCode', 403)
+            expect(res).to.have.property('statusCode', 400)
             res.resume()
             res.once('end', done)
           })
@@ -444,28 +429,7 @@ describe('server', () => {
             headers: {
               connection: 'upgrade',
               upgrade: 'unsupported',
-              'x-tunnel-token': token
-            }
-          }
-          const req = request(reqOptions, res => {
-            expect(res).to.have.property('statusCode', 400)
-            res.resume()
-            res.once('end', done)
-          })
-          req.end()
-        })
-
-      })
-
-      context('when the x-tunnel-host header is not set', () => {
-
-        it('responds with a 400 error', done => {
-          const reqOptions = {
-            port: proxyPort,
-            headers: {
-              connection: 'upgrade',
-              upgrade: '@http-public/tunnel',
-              'x-tunnel-token': token
+              'x-tunnel-host': 'test.localhost'
             }
           }
           const req = request(reqOptions, res => {
@@ -486,8 +450,7 @@ describe('server', () => {
             headers: {
               connection: 'upgrade',
               upgrade: '@http-public/tunnel',
-              'x-tunnel-host': 'unknown.localhost',
-              'x-tunnel-token': token
+              'x-tunnel-host': 'fake.localhost'
             }
           }
           const req = request(reqOptions, res => {
@@ -500,7 +463,9 @@ describe('server', () => {
 
       })
 
-      context('when an agent is serving the hostname', () => {
+      context('when a tunnel agent is serving the hostname', () => {
+
+        let tunnelKey: string
 
         beforeEach('create a tunnel agent', done => {
           const reqOptions = {
@@ -512,43 +477,70 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
+            tunnelKey = res.headers['x-tunnel-key'] as string
             res.resume()
             res.once('end', done)
           })
           req.end()
         })
 
-        it('upgrades the socket connection', done => {
-          const reqOptions = {
-            port: proxyPort,
-            headers: {
-              connection: 'upgrade',
-              upgrade: '@http-public/tunnel',
-              'x-tunnel-host': 'new.localhost',
-              'x-tunnel-token': token
+        context('but the tunnel key is incorrect', () => {
+
+          it('responds with a 404 error', done => {
+            const reqOptions = {
+              port: proxyPort,
+              headers: {
+                connection: 'upgrade',
+                upgrade: '@http-public/tunnel',
+                'x-tunnel-host': 'new.localhost',
+                'x-tunnel-key': 'not the key'
+              }
             }
-          }
-          const req = request(reqOptions).once('upgrade', (_, tunnel) => {
-            tunnel.end(CLIENT_ACK, done)
+            const req = request(reqOptions, res => {
+              expect(res).to.have.property('statusCode', 404)
+              res.resume()
+              res.once('end', done)
+            })
+            req.end()
           })
-          req.end()
+
         })
 
-        it('requires a valid CLIENT_ACK', done => {
-          const reqOptions = {
-            port: proxyPort,
-            headers: {
-              connection: 'upgrade',
-              upgrade: '@http-public/tunnel',
-              'x-tunnel-host': 'new.localhost',
-              'x-tunnel-token': token
+        context('and the tunnel key is correct', () => {
+
+          it('upgrades the connection', done => {
+            const reqOptions = {
+              port: proxyPort,
+              headers: {
+                connection: 'upgrade',
+                upgrade: '@http-public/tunnel',
+                'x-tunnel-host': 'new.localhost',
+                'x-tunnel-key': tunnelKey
+              }
             }
-          }
-          const req = request(reqOptions).once('upgrade', (_, tunnel) => {
-            tunnel.once('close', () => done())
-            tunnel.write('\x11')
+            const req = request(reqOptions).once('upgrade', (_, tunnel) => {
+              tunnel.end(CLIENT_ACK, done)
+            })
+            req.end()
           })
-          req.end()
+
+          it('requires a valid CLIENT_ACK', done => {
+            const reqOptions = {
+              port: proxyPort,
+              headers: {
+                connection: 'upgrade',
+                upgrade: '@http-public/tunnel',
+                'x-tunnel-host': 'new.localhost',
+                'x-tunnel-key': tunnelKey
+              }
+            }
+            const req = request(reqOptions).once('upgrade', (_, tunnel) => {
+              tunnel.once('close', () => done())
+              tunnel.write('\x11')
+            })
+            req.end()
+          })
+
         })
 
       })
@@ -580,6 +572,7 @@ describe('server', () => {
 
       context('when no tunnels are available for the hostname', () => {
 
+        let tunnelKey: string
         let clock: SinonFakeTimers
 
         beforeEach('create a tunnel agent', done => {
@@ -593,6 +586,7 @@ describe('server', () => {
           }
           const req = request(reqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
+            tunnelKey = res.headers['x-tunnel-key'] as string
             res.resume()
             res.once('end', done)
           })
@@ -617,7 +611,7 @@ describe('server', () => {
               connection: 'upgrade',
               upgrade: '@http-public/tunnel',
               'x-tunnel-host': 'new.localhost',
-              'x-tunnel-token': token
+              'x-tunnel-key': tunnelKey
             }
           }
           const tunnelReq = request(tunnelReqOptions)
@@ -649,7 +643,7 @@ describe('server', () => {
                 connection: 'upgrade',
                 upgrade: '@http-public/tunnel',
                 'x-tunnel-host': 'new.localhost',
-                'x-tunnel-token': token
+                'x-tunnel-key': tunnelKey
               }
             }
             const tunnelReq = request(tunnelReqOptions)
@@ -680,7 +674,7 @@ describe('server', () => {
                   connection: 'upgrade',
                   upgrade: '@http-public/tunnel',
                   'x-tunnel-host': 'new.localhost',
-                  'x-tunnel-token': token
+                  'x-tunnel-key': tunnelKey
                 }
               }
               const tunnelReq = request(tunnelReqOptions)
@@ -698,6 +692,7 @@ describe('server', () => {
       context('when a tunnel connection is available for the hostname', () => {
 
         let tunnel: Socket
+        let tunnelKey: string
 
         beforeEach('create a tunnel agent and tunnel', done => {
           const clientReqOptions = {
@@ -709,6 +704,7 @@ describe('server', () => {
           }
           const clientReq = request(clientReqOptions, res => {
             expect(res).to.have.property('statusCode', 201)
+            tunnelKey = res.headers['x-tunnel-key'] as string
             res.resume()
             res.once('end', () => {
               const tunnelReqOptions = {
@@ -717,7 +713,7 @@ describe('server', () => {
                   connection: 'upgrade',
                   upgrade: '@http-public/tunnel',
                   'x-tunnel-host': 'new.localhost',
-                  'x-tunnel-token': token
+                  'x-tunnel-key': tunnelKey
                 }
               }
               const tunnelReq = request(tunnelReqOptions)

@@ -7,6 +7,7 @@ import {
 } from 'http'
 import { Socket } from 'net'
 import { pipeline } from 'stream'
+import { randomBytes } from 'crypto'
 import { TunnelAgent } from './tunnel-agent'
 import { head, noop, isUndefined, getHostname, getRequestHead } from './util'
 
@@ -18,7 +19,7 @@ type ServerOptions = {
 export const createServer = (options: ServerOptions): HttpServer => {
 
   const server = new HttpServer()
-  const agents = new Map<string, TunnelAgent>()
+  const agents = new Map<string, [null | string, TunnelAgent]>()
 
   const { host: proxyHost, token } = options
 
@@ -32,7 +33,7 @@ export const createServer = (options: ServerOptions): HttpServer => {
       onClientRequest(req, res)
       return
     }
-    onRemoteRequest(host, req, res)
+    onProxyRequest(host, req, res)
   })
 
   server.on('upgrade', (req: Req, socket: Socket) => {
@@ -48,13 +49,13 @@ export const createServer = (options: ServerOptions): HttpServer => {
       onClientUpgrade(req, socket)
       return
     }
-    onRemoteUpgrade(host, req, socket)
+    onProxyUpgrade(host, req, socket)
   })
 
   const closeServer = server.close
 
   server.close = (onClose: (err?: Error) => void) => {
-    agents.forEach((agent, host) => {
+    agents.forEach(([, agent], host) => {
       agents.delete(host)
       agent.destroy()
     })
@@ -79,13 +80,17 @@ export const createServer = (options: ServerOptions): HttpServer => {
       return
     }
     const agent = new TunnelAgent()
-    agents.set(host, agent)
-    agent.once('timeout', () => agents.delete(host))
-    res.writeHead(201).end()
+    agents.set(host, [null, agent])
+    randomBytes(8, (_, bytes) => {
+      const key = bytes.toString('base64')
+      agents.set(host, [key, agent])
+      agent.once('timeout', () => agents.delete(host))
+      res.writeHead(201, { 'x-tunnel-key': key }).end()
+    })
   }
 
-  function onRemoteRequest(host: string, req: Req, res: Res): void {
-    const agent = agents.get(host)
+  function onProxyRequest(host: string, req: Req, res: Res): void {
+    const [, agent] = agents.get(host) ?? []
     if (isUndefined(agent)) {
       res.writeHead(404).end()
       return
@@ -106,21 +111,6 @@ export const createServer = (options: ServerOptions): HttpServer => {
   }
 
   function onClientUpgrade(req: Req, socket: Socket): void {
-    const tokenHeader = req.headers['x-tunnel-token']
-    if (isUndefined(tokenHeader) || tokenHeader !== token) {
-      socket.end(head`
-        HTTP/1.1 403 Forbidden
-        Connection: close
-      `)
-      return
-    }
-    if (req.headers.upgrade !== '@http-public/tunnel') {
-      socket.end(head`
-        HTTP/1.1 400 Bad Request
-        Connection: close
-      `)
-      return
-    }
     const host = getHostname(req.headers['x-tunnel-host'])
     if (isUndefined(host)) {
       socket.end(head`
@@ -129,8 +119,24 @@ export const createServer = (options: ServerOptions): HttpServer => {
       `)
       return
     }
-    const agent = agents.get(host)
+    const { upgrade } = req.headers
+    if (upgrade !== '@http-public/tunnel') {
+      socket.end(head`
+        HTTP/1.1 400 Bad Request
+        Connection: close
+      `)
+      return
+    }
+    const [key, agent] = agents.get(host) ?? []
     if (isUndefined(agent)) {
+      socket.end(head`
+        HTTP/1.1 404 Not Found
+        Connection: close
+      `)
+      return
+    }
+    const { 'x-tunnel-key': tunnelKey } = req.headers
+    if (tunnelKey !== key) {
       socket.end(head`
         HTTP/1.1 404 Not Found
         Connection: close
@@ -145,8 +151,8 @@ export const createServer = (options: ServerOptions): HttpServer => {
     agent.registerTunnel(socket)
   }
 
-  function onRemoteUpgrade(host: string, req: Req, socket: Socket): void {
-    const agent = agents.get(host)
+  function onProxyUpgrade(host: string, req: Req, socket: Socket): void {
+    const [, agent] = agents.get(host) ?? []
     if (isUndefined(agent)) {
       socket.end(head`
         HTTP/1.1 404 Not Found

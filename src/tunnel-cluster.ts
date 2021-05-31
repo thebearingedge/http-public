@@ -19,7 +19,7 @@ export interface TunnelCluster extends EventEmitter {
 type TunnelClusterOptions = {
   proxyUrl: URL
   localUrl: URL
-  token: string
+  key: string
   domain: string
   request: typeof httpRequest | typeof httpsRequest
   connections: number
@@ -40,13 +40,13 @@ export class TunnelCluster extends EventEmitter {
 
   private open(): void {
 
-    const { proxyUrl, token, domain, request } = this.options
+    const { proxyUrl, key, domain, request } = this.options
 
     const tunnelReqOptions = {
       headers: {
         connection: 'upgrade',
         upgrade: '@http-public/tunnel',
-        'x-tunnel-token': token,
+        'x-tunnel-key': key,
         'x-tunnel-host': domain
       }
     }
