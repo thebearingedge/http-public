@@ -48,7 +48,7 @@ This project scratched a few itches for me:
 
 - Learn a bit more about [Streams](https://nodejs.org/api/stream.html).
 - Learn a bit more about [HTTP](https://nodejs.org/api/http.html) over [TCP](https://nodejs.org/api/net.html).
-- Learn a bit more about [Web Sockets](https://en.wikipedia.org/wiki/WebSocket) over HTTP and what the hell [`Connection: Upgrade`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Upgrade) and [`101 Switching Protocols`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/101) actually meant.
+- Learn a bit more about [Web Sockets](https://en.wikipedia.org/wiki/WebSocket) over HTTP and what the hell [`Connection: Upgrade`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Upgrade) and [`101 Switching Protocols`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/101) are used for.
 - Write some TypeScript.
 - Use as few production dependencies as possible. I only included [`commander`](https://www.npmjs.com/package/commander) for the CLI.
 
@@ -71,7 +71,7 @@ This project scratched a few itches for me:
 
 ### Server
 
-Once the server is started, keep it running with something like `pm2`, `forever`, `supervisor`, or whatever and leave it alone. If you are using HTTPS (and you should), then you'll need to set up Nginx or Caddy in front of it and set up a wildcard TLS certificate that covers your domain name as well as a wildcard for the subdomains you'll be serving your individual local apps from.
+Once the server is started, keep it running with something like `pm2`, `forever`, `supervisor`, or whatever and leave it alone. If you are using HTTPS (and you should), then you'll need to set up Nginx or Caddy in front of it and set up a wildcard TLS certificate that covers your domain name as well as the subdomains you'll be serving your individual local apps from. I've included an example Nginx config.
 
 The server handles four different types of requests.
 
@@ -96,4 +96,4 @@ http-public https://my.site.com http://localhost:3000 -t <your server token> -n 
 # http-public proxy listening at https://demo.my.site.com/
 ```
 
-As tunnel connections close or die, the client reopens them to keep the connection pool filled.
+As tunnel connections close, the client reopens them to keep the connection pool filled.
