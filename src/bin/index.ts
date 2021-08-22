@@ -22,12 +22,10 @@ program
   .description('Forward HTTP traffic from the public Internet to localhost.')
 
 program
-  .command('client <proxy> [local]', { isDefault: true })
+  .command('client', { isDefault: true })
   .alias('c')
-  .description('start a local tunnel client', {
-    proxy: 'public server origin \nexample: https://tunnel.my.site',
-    local: 'local server origin \ndefault: http://localhost:3000'
-  })
+  .argument('<proxy>', 'public server origin \nexample: https://tunnel.my.site')
+  .argument('[local]', 'local server origin \ndefault: http://localhost:3000')
   .requiredOption('-t, --token <token>', 'access token for the tunnel server')
   .requiredOption('-n, --subdomain <name>', 'subdomain for the tunnel')
   .option('-c, --connections <count>', 'number of connections to open', '10')

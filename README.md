@@ -1,11 +1,24 @@
 # http-public
 
-Forward HTTP traffic from the public Internet to `localhost`. Great for webhooks.
+Route HTTP traffic from the public internet. Great for web hooks.
 
 [![Github Actions Test Status](https://github.com/thebearingedge/http-public/workflows/Test/badge.svg?branch=master)](https://github.com/thebearingedge/http-public/actions?query=workflow%3ATest+branch%3Amaster)
-[![Codecov Coverage Percentage](https://codecov.io/gh/thebearingedge/http-public/branch/master/graph/badge.svg?token=NJIGDAoq7D)](https://codecov.io/gh/thebearingedge/http-public)
+[![Codecov Coverage Percentage](https://codecov.io/gh/thebearingedge/http-public/branch/master/graph/badge.svg)](https://codecov.io/gh/thebearingedge/http-public)
+![npm package](https://img.shields.io/npm/v/http-public)
 
-`http-public` is a tunneling app like [`localtunnel`](https://localtunnel.github.io/www/), [`ngrok`](https://ngrok.com/), or [`expose`](https://beyondco.de/docs/expose/introduction). You should probably use one of those instead. I personally recommend `expose` as it is the most robust and polished (free) experience.
+`http-public` is a barebones knock-off of apps like [`localtunnel`](https://localtunnel.github.io/www/), [`ngrok`](https://ngrok.com/), or [`expose`](https://beyondco.de/docs/expose/introduction).
+
+## Installation
+
+```shell
+npm install -D http-public
+```
+
+## Execution
+
+```shell
+npx http-public <args...>
+```
 
 ### `http-public server --help`
 
@@ -44,13 +57,7 @@ Options:
 
 ## Motivation
 
-This project scratched a few itches for me:
-
-- Learn a bit more about [Streams](https://nodejs.org/api/stream.html).
-- Learn a bit more about [HTTP](https://nodejs.org/api/http.html) over [TCP](https://nodejs.org/api/net.html).
-- Learn a bit more about [Web Sockets](https://en.wikipedia.org/wiki/WebSocket) over HTTP and what the hell [`Connection: Upgrade`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Upgrade) and [`101 Switching Protocols`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/101) are used for.
-- Write some TypeScript.
-- Use as few production dependencies as possible. I only included [`commander`](https://www.npmjs.com/package/commander) for the CLI.
+Simple, self-hosted HTTP tunneling.
 
 ## Features
 
@@ -58,20 +65,20 @@ This project scratched a few itches for me:
 - Self-hosted. Set it up on your own VPS.
 - Supports HTTP messages and Web Sockets.
 - Supports different subdomains for different apps.
+- Use as few production dependencies as possible. Only includes [`commander`](https://www.npmjs.com/package/commander) for the CLI.
 
 ## Limitations
 
 - The server does not proxy raw TCP connections. Everything is done via HTTP requests and connection upgrades.
 - The server does not support HTTPS, you have to put it behind something like Nginx or Caddy.
-- The client does not have any elegant logging. It only prints errors if they occur.
 - No random subdomain generation. You just get a `409 Conflict` if you try to use the same subdomain for two different apps.
-- Not published to `npm`.
+- The client does not have any elegant logging. It only prints errors if they occur. PRs welcome.
 
 ## How it Works
 
 ### Server
 
-Once the server is started, keep it running with something like `pm2`, `forever`, `supervisor`, or whatever and leave it alone. If you are using HTTPS (and you should), then you'll need to set up Nginx or Caddy in front of it and set up a wildcard TLS certificate that covers your domain name as well as the subdomains you'll be serving your individual local apps from. I've included an example Nginx config.
+Once the server is started, keep it running with something like `pm2`, `forever`, `supervisor`, or whatever and leave it alone. If you are using HTTPS (and you should), then you'll need to set up Nginx or Caddy in front of it and set up a wildcard TLS certificate that covers your domain name as well as the subdomains you'll be serving your individual local apps from. I've included [an example Nginx config](https://github.com/thebearingedge/http-public/blob/master/nginx.example.conf) in the source repository.
 
 The server handles four different types of requests.
 
