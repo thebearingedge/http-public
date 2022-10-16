@@ -7,7 +7,7 @@
     "proxy": "dist/bin/index.js"
   },
   "engines": {
-    "node": ">=14 <17"
+    "node": ">=14"
   },
   "scripts": {
     "demo": "ts-node src/bin/",
